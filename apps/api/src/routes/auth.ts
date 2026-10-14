@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -45,11 +45,16 @@ export function authLimiter(cfg: Config, limit = 150, perLogin = false) {
 
 export function authRouter(db: Db, cfg: Config) {
   const r = Router();
-  const secureCookie = cfg.APP_ORIGIN.startsWith('https://');
+  // Cookie "Secure" según el origen (ya validado por el CSRF guard) desde el que se hace la petición:
+  // así funciona a la vez con un dominio HTTPS y con un acceso HTTP por IP en la red local.
+  const isSecure = (req: Request) => {
+    const origin = req.get('origin');
+    return origin ? origin.startsWith('https://') : cfg.APP_ORIGIN.startsWith('https://');
+  };
   const limiter = authLimiter(cfg);
   const loginLimiter = authLimiter(cfg, 20, true);
 
-  async function startSession(res: Response, userId: string) {
+  async function startSession(req: Request, res: Response, userId: string) {
     const token = newToken();
     await db.query(
       `INSERT INTO sessions (token_hash, user_id, expires_at)
@@ -58,7 +63,7 @@ export function authRouter(db: Db, cfg: Config) {
     );
     res.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure: secureCookie,
+      secure: isSecure(req),
       sameSite: 'strict',
       path: '/',
       maxAge: cfg.SESSION_TTL_HOURS * 3600 * 1000,
@@ -81,7 +86,7 @@ export function authRouter(db: Db, cfg: Config) {
     // Mismo mensaje si el email ya existe para no confirmar qué cuentas hay.
     if (!id) throw badRequest('registration_failed', 'No se ha podido completar el registro');
     await audit(db, id, 'user.register_teacher', { type: 'user', id });
-    await startSession(res, id);
+    await startSession(req, res, id);
     res.status(201).json({ user: { id, login: body.email, displayName: body.displayName, role: 'teacher' } });
   });
 
@@ -108,7 +113,7 @@ export function authRouter(db: Db, cfg: Config) {
       await audit(c, uid, 'user.register_student', { type: 'user', id: uid });
       return uid;
     });
-    await startSession(res, id);
+    await startSession(req, res, id);
     res.status(201).json({ user: { id, login: body.username, displayName: body.displayName, role: 'student' } });
   });
 
@@ -139,14 +144,14 @@ export function authRouter(db: Db, cfg: Config) {
     }
     await db.query('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id]);
     await db.query('DELETE FROM sessions WHERE user_id = $1 AND expires_at <= now()', [u.id]);
-    await startSession(res, u.id);
+    await startSession(req, res, u.id);
     await audit(db, u.id, 'auth.login', { type: 'user', id: u.id });
     res.json({ user: { id: u.id, login: u.login, displayName: u.display_name, role: u.role } });
   });
 
   r.post('/logout', async (req, res) => {
     if (req.sessionTokenHash) await db.query('DELETE FROM sessions WHERE token_hash = $1', [req.sessionTokenHash]);
-    res.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, secure: secureCookie, sameSite: 'strict' });
+    res.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, secure: isSecure(req), sameSite: 'strict' });
     res.status(204).end();
   });
 

@@ -54,6 +54,10 @@ ALLOW_PUBLIC_INDEXING=false
 
 - `APP_ORIGIN` debe coincidir **exactamente** con la dirección que se escribe en el navegador
   (protocolo, IP y puerto). Si no coincide, todas las acciones darán “Origen no permitido”.
+  Admite varias separadas por comas; la primera es la principal:
+  `APP_ORIGIN=https://mylinguisticportfolio.es,https://portfolio.tecnologiaalcala.com,http://192.168.1.134:8090`
+- La app **no arranca** en producción si `SESSION_SECRET` o `TEACHER_SIGNUP_CODE` tienen los valores de ejemplo
+  de esta guía (contienen `<` `>`): sustitúyelos antes de desplegar.
 - Para generar `SESSION_SECRET` sin terminal puedes usar la consola de EasyPanel: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 - `PUBLICATION_ENABLED=false`: se puede trabajar, revisar y aprobar, pero no publicar en abierto hasta que el
   centro complete la revisión legal. Cámbialo a `true` cuando proceda y redepliega.

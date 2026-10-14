@@ -276,3 +276,28 @@ describe('CLI create-admin', () => {
     expect((await client(app).login('jefe@centro.test', 'una-contraseña-admin-larga')).status).toBe(200);
   });
 });
+
+describe('configuración', () => {
+  it('APP_ORIGIN admite varios orígenes: todos pasan el CSRF y la cookie Secure depende del origen', async () => {
+    const multi = createApp(db, testConfig({ APP_ORIGIN: 'https://mylinguisticportfolio.es, http://192.168.1.134:8090' }));
+    await createUser(db, 'alumno@centro.test', 'student');
+    const https = await request(multi).post('/api/auth/login').set('Origin', 'https://mylinguisticportfolio.es')
+      .send({ login: 'alumno@centro.test', password: 'contraseña-segura-1' });
+    expect(https.status).toBe(200);
+    expect(String(https.headers['set-cookie'])).toMatch(/Secure/);
+    const lan = await request(multi).post('/api/auth/login').set('Origin', 'http://192.168.1.134:8090')
+      .send({ login: 'alumno@centro.test', password: 'contraseña-segura-1' });
+    expect(lan.status).toBe(200);
+    expect(String(lan.headers['set-cookie'])).not.toMatch(/Secure/);
+    const other = await request(multi).post('/api/auth/login').set('Origin', 'https://otro.test')
+      .send({ login: 'alumno@centro.test', password: 'contraseña-segura-1' });
+    expect(other.status).toBe(403);
+  });
+
+  it('rechaza orígenes no válidos y valores de ejemplo en producción', () => {
+    expect(() => testConfig({ APP_ORIGIN: 'ftp://x.test' })).toThrow(/Origen no válido/);
+    expect(() => testConfig({ NODE_ENV: 'production', SESSION_SECRET: '<64 caracteres hex: openssl rand -hex 32>' })).toThrow(/SESSION_SECRET/);
+    expect(() => testConfig({ NODE_ENV: 'production', TEACHER_SIGNUP_CODE: '<código para que se registren>' })).toThrow(/TEACHER_SIGNUP_CODE/);
+    expect(testConfig({ APP_ORIGIN: 'https://a.test/, https://b.test' }).APP_ORIGINS).toEqual(['https://a.test', 'https://b.test']);
+  });
+});

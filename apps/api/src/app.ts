@@ -58,7 +58,7 @@ export function createApp(db: Db, cfg: Config) {
     }
   });
 
-  app.use('/api', express.json({ limit: '200kb' }), cookieParser(), csrfGuard(cfg.APP_ORIGIN), loadSession(db));
+  app.use('/api', express.json({ limit: '200kb' }), cookieParser(), csrfGuard(cfg.APP_ORIGINS), loadSession(db));
   app.use('/api', (_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();

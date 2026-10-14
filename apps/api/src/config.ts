@@ -9,7 +9,29 @@ const boolFlag = z
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  APP_ORIGIN: z.url(),
+  // Uno o varios orígenes separados por comas. El primero es el principal (enlaces de recuperación y publicación).
+  APP_ORIGIN: z
+    .string()
+    .min(1)
+    .transform((v, ctx) => {
+      const list = v.split(',').map((s) => s.trim()).filter(Boolean);
+      const origins: string[] = [];
+      for (const item of list) {
+        try {
+          const u = new URL(item);
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error();
+          origins.push(u.origin);
+        } catch {
+          ctx.addIssue({ code: 'custom', message: `Origen no válido: ${item}` });
+          return z.NEVER;
+        }
+      }
+      if (!origins.length) {
+        ctx.addIssue({ code: 'custom', message: 'APP_ORIGIN vacío' });
+        return z.NEVER;
+      }
+      return origins;
+    }),
   DATABASE_URL: z.string().min(1),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET debe tener al menos 32 caracteres'),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24 * 30).default(12),
@@ -26,7 +48,18 @@ const schema = z.object({
   ALLOW_PUBLIC_INDEXING: boolFlag,
 });
 
-export type Config = z.infer<typeof schema>;
+type Parsed = z.infer<typeof schema>;
+export type Config = Omit<Parsed, 'APP_ORIGIN'> & {
+  /** Origen principal (el primero de la lista). */
+  APP_ORIGIN: string;
+  /** Todos los orígenes permitidos. */
+  APP_ORIGINS: string[];
+};
+
+/** Detecta valores copiados de la guía sin sustituir (p. ej. "<64 caracteres hex: ...>"). */
+export function looksLikePlaceholder(v: string): boolean {
+  return /[<>]|sustituye|cambia|example/i.test(v);
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = schema.safeParse(env);
@@ -35,9 +68,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n  ');
     throw new Error(`Configuración inválida:\n  ${issues}`);
   }
-  const cfg = parsed.data;
-  if (cfg.NODE_ENV === 'production' && /sustituye|cambia|example/i.test(cfg.SESSION_SECRET)) {
-    throw new Error('SESSION_SECRET contiene un valor de ejemplo; genera uno real con `openssl rand -hex 32`.');
+  const { APP_ORIGIN: origins, ...rest } = parsed.data;
+  const cfg: Config = { ...rest, APP_ORIGIN: origins[0]!, APP_ORIGINS: origins };
+  if (cfg.NODE_ENV === 'production') {
+    // Valores copiados de la documentación pública = secretos conocidos: no se arranca.
+    if (looksLikePlaceholder(cfg.SESSION_SECRET)) {
+      throw new Error('SESSION_SECRET tiene un valor de ejemplo. Genera uno real con `openssl rand -hex 32`.');
+    }
+    if (cfg.TEACHER_SIGNUP_CODE && looksLikePlaceholder(cfg.TEACHER_SIGNUP_CODE)) {
+      throw new Error('TEACHER_SIGNUP_CODE tiene un valor de ejemplo. Pon un código propio o déjalo vacío.');
+    }
   }
   return cfg;
 }
