@@ -1,0 +1,51 @@
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --text: #1d2330;
+  --muted: #5a6273;
+  --accent: #1f4e8c;
+  --accent-text: #ffffff;
+  --border: #d8d4ca;
+  --danger-bg: #fdecec;
+  --danger: #8a1c1c;
+  --ok-bg: #eaf3ea;
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171d;
+    --surface: #1d2129;
+    --text: #e8eaee;
+    --muted: #a3aab8;
+    --accent: #7fb0f0;
+    --accent-text: #0e1420;
+    --border: #343a46;
+    --danger-bg: #3a1d1d;
+    --danger: #f3b4b4;
+    --ok-bg: #1d3320;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.brand { font-weight: 700; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 16px; margin: 24px auto; max-width: 960px; width: calc(100% - 32px); }
+.narrow { max-width: 420px; }
+h1 { font-size: 1.5rem; margin-top: 0; }
+.muted { color: var(--muted); }
+form { display: flex; flex-direction: column; gap: 8px; }
+form.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+label { font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
+input, select { font: inherit; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); width: 100%; }
+button { font: inherit; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; }
+button.secondary { background: transparent; color: var(--accent); }
+button:disabled { opacity: 0.6; cursor: wait; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.alert { background: var(--danger-bg); color: var(--danger); padding: 10px 12px; border-radius: 6px; }
+.notice { background: var(--ok-bg); padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.actions { display: flex; gap: 6px; }

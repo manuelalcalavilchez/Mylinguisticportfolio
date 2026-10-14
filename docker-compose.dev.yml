@@ -1,0 +1,17 @@
+# Desarrollo local: solo Postgres en Docker; API y web con `npm run dev:api` / `npm run dev:web`.
+# Uso:  docker compose -f docker-compose.dev.yml up -d
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mlp
+      POSTGRES_PASSWORD: mlp_dev_password
+      POSTGRES_DB: mlp
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+      - ./scripts/dev-init.sql:/docker-entrypoint-initdb.d/dev-init.sql:ro
+
+volumes:
+  pgdata_dev:

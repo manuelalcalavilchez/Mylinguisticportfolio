@@ -1,0 +1,59 @@
+# Producción en servidor pequeño: 2 contenedores (app + Postgres), ~450 MB de RAM en total como máximo.
+# Uso:  cp .env.example .env  (y edítalo)  &&  docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # Ajustes para poca memoria y pocos usuarios concurrentes
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=192MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=20
+      - -c
+      - wal_buffers=4MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    # Sin "ports": la base de datos NO se expone fuera de la red de Docker.
+
+  app:
+    build: .
+    image: my-linguistic-portfolio:latest
+    restart: unless-stopped
+    env_file: .env
+    # init: PID 1 ligero que reenvía señales (parada limpia)
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      STORAGE_DIR: /data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/data/uploads
+    # Solo en localhost: delante va el proxy inverso con HTTPS (Caddy, Traefik de EasyPanel, nginx...).
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
+    mem_limit: 256m
+
+volumes:
+  pgdata:
+  uploads:
