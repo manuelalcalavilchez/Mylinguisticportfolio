@@ -10,10 +10,18 @@ import { csrfGuard } from './middleware/csrf.js';
 import { errorHandler } from './middleware/errors.js';
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin.js';
+import { groupsRouter } from './routes/groups.js';
+import { projectsRouter } from './routes/projects.js';
+import { portfoliosRouter } from './routes/portfolios.js';
+import { evidencesRouter } from './routes/evidences.js';
+import { publicationsRouter, publicRouter } from './routes/publications.js';
+import { meRouter } from './routes/me.js';
+import { Storage } from './lib/storage.js';
 import { notFound } from './lib/errors.js';
 
 export function createApp(db: Db, cfg: Config) {
   const app = express();
+  const storage = new Storage(cfg.STORAGE_DIR);
   app.disable('x-powered-by');
   app.set('trust proxy', cfg.TRUST_PROXY);
 
@@ -56,7 +64,14 @@ export function createApp(db: Db, cfg: Config) {
     next();
   });
   app.use('/api/auth', authRouter(db, cfg));
-  app.use('/api/admin', adminRouter(db, cfg));
+  app.use('/api/admin', adminRouter(db, cfg, storage));
+  app.use('/api/public', publicRouter(db, cfg, storage));
+  app.use('/api/groups', groupsRouter(db, cfg));
+  app.use('/api/portfolios', portfoliosRouter(db));
+  app.use('/api/portfolios', publicationsRouter(db, cfg));
+  app.use('/api/me', meRouter(db));
+  app.use('/api', evidencesRouter(db, cfg, storage));
+  app.use('/api', projectsRouter(db));
   app.use('/api', (_req, _res, next) => next(notFound()));
 
   // En producción la API sirve también el frontend compilado: un solo contenedor, menos RAM.

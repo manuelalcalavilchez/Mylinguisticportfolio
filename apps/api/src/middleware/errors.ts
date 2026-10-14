@@ -11,7 +11,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     });
   }
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ error: err.code, message: err.message });
+    return res.status(err.status).json({ error: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) });
   }
   const e = err as { type?: string; status?: number };
   if (e?.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large' });

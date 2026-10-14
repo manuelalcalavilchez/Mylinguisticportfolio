@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// z.coerce.boolean() convierte "false" en true; por eso se usa un enum explícito.
+const boolFlag = z
+  .enum(['true', 'false', ''])
+  .default('false')
+  .transform((v) => v === 'true');
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -14,6 +20,10 @@ const schema = z.object({
   STATIC_DIR: z.string().optional(),
   // Nº de proxies inversos delante (Traefik de EasyPanel, Caddy...). Necesario para que el rate limit vea la IP real.
   TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+  // Interruptor general de publicación pública. Desactivado hasta completar la revisión legal con el centro.
+  PUBLICATION_ENABLED: boolFlag,
+  // Permitir que un profesor marque un portfolio publicado como indexable por buscadores.
+  ALLOW_PUBLIC_INDEXING: boolFlag,
 });
 
 export type Config = z.infer<typeof schema>;

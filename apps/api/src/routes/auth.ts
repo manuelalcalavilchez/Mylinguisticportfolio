@@ -6,13 +6,13 @@ import type { Config } from '../config.js';
 import { withTransaction, type Db } from '../db.js';
 import { audit } from '../lib/audit.js';
 import { badRequest, HttpError, unauthorized } from '../lib/errors.js';
+import { joinGroupWithCode } from '../lib/invites.js';
 import { getDummyHash, hashPassword, verifyPassword } from '../lib/password.js';
 import { hashToken, newToken } from '../lib/tokens.js';
+import {
+  displayNameSchema, emailSchema, loginIdSchema, passwordSchema, usernameSchema,
+} from '../lib/validation.js';
 import { requireAuth, SESSION_COOKIE } from '../middleware/auth.js';
-
-export const emailSchema = z.email().max(254).transform((e) => e.trim().toLowerCase());
-export const passwordSchema = z.string().min(10, 'Mínimo 10 caracteres').max(200);
-export const displayNameSchema = z.string().trim().min(1).max(80);
 
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
@@ -23,16 +23,20 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
-export function authRouter(db: Db, cfg: Config) {
-  const r = Router();
-  const secureCookie = cfg.APP_ORIGIN.startsWith('https://');
-  const limiter = rateLimit({
+export function authLimiter(cfg: Config, limit = 20) {
+  return rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: cfg.NODE_ENV === 'test' ? 1000 : 20,
+    limit: cfg.NODE_ENV === 'test' ? 10_000 : limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { error: 'too_many_requests', message: 'Demasiados intentos. Prueba más tarde.' },
   });
+}
+
+export function authRouter(db: Db, cfg: Config) {
+  const r = Router();
+  const secureCookie = cfg.APP_ORIGIN.startsWith('https://');
+  const limiter = authLimiter(cfg);
 
   async function startSession(res: Response, userId: string) {
     const token = newToken();
@@ -58,7 +62,7 @@ export function authRouter(db: Db, cfg: Config) {
     if (!safeEqual(body.signupCode, cfg.TEACHER_SIGNUP_CODE)) throw badRequest('invalid_signup_code', 'Código de registro no válido');
     const hash = await hashPassword(body.password);
     const ins = await db.query<{ id: string }>(
-      `INSERT INTO users (email, display_name, password_hash, role) VALUES ($1, $2, $3, 'teacher')
+      `INSERT INTO users (login, display_name, password_hash, role) VALUES ($1, $2, $3, 'teacher')
        ON CONFLICT DO NOTHING RETURNING id`,
       [body.email, body.displayName, hash],
     );
@@ -67,19 +71,46 @@ export function authRouter(db: Db, cfg: Config) {
     if (!id) throw badRequest('registration_failed', 'No se ha podido completar el registro');
     await audit(db, id, 'user.register_teacher', { type: 'user', id });
     await startSession(res, id);
-    res.status(201).json({ user: { id, email: body.email, displayName: body.displayName, role: 'teacher' } });
+    res.status(201).json({ user: { id, login: body.email, displayName: body.displayName, role: 'teacher' } });
+  });
+
+  // Alta de alumnado: solo con código de grupo válido. Sin email (minimización de datos de menores).
+  r.post('/register-student', limiter, async (req, res) => {
+    const body = z
+      .object({
+        inviteCode: z.string().min(4).max(40),
+        username: usernameSchema,
+        displayName: displayNameSchema,
+        password: passwordSchema,
+      })
+      .parse(req.body);
+    const hash = await hashPassword(body.password);
+    const id = await withTransaction(db, async (c) => {
+      const ins = await c.query<{ id: string }>(
+        `INSERT INTO users (login, display_name, password_hash, role) VALUES ($1, $2, $3, 'student')
+         ON CONFLICT DO NOTHING RETURNING id`,
+        [body.username, body.displayName, hash],
+      );
+      const uid = ins.rows[0]?.id;
+      if (!uid) throw badRequest('username_taken', 'Ese nombre de usuario no está disponible');
+      await joinGroupWithCode(c, uid, body.inviteCode); // si falla, se deshace también el usuario
+      await audit(c, uid, 'user.register_student', { type: 'user', id: uid });
+      return uid;
+    });
+    await startSession(res, id);
+    res.status(201).json({ user: { id, login: body.username, displayName: body.displayName, role: 'student' } });
   });
 
   r.post('/login', limiter, async (req, res) => {
-    const body = z.object({ email: emailSchema, password: z.string().max(200) }).parse(req.body);
+    const body = z.object({ login: loginIdSchema, password: z.string().max(200) }).parse(req.body);
     const { rows } = await db.query<{
-      id: string; email: string; display_name: string; role: string; password_hash: string;
+      id: string; login: string; display_name: string; role: string; password_hash: string;
       status: string; locked: boolean;
     }>(
-      `SELECT id, email, display_name, role, password_hash, status,
+      `SELECT id, login, display_name, role, password_hash, status,
               (locked_until IS NOT NULL AND locked_until > now()) AS locked
-         FROM users WHERE lower(email) = $1`,
-      [body.email],
+         FROM users WHERE lower(login) = $1`,
+      [body.login],
     );
     const u = rows[0];
     const ok = await verifyPassword(body.password, u?.password_hash ?? (await getDummyHash()));
@@ -93,13 +124,13 @@ export function authRouter(db: Db, cfg: Config) {
         );
         await audit(db, u.id, 'auth.login_failed', { type: 'user', id: u.id });
       }
-      throw new HttpError(401, 'invalid_credentials', 'Email o contraseña incorrectos');
+      throw new HttpError(401, 'invalid_credentials', 'Usuario o contraseña incorrectos');
     }
     await db.query('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = $1', [u.id]);
     await db.query('DELETE FROM sessions WHERE user_id = $1 AND expires_at <= now()', [u.id]);
     await startSession(res, u.id);
     await audit(db, u.id, 'auth.login', { type: 'user', id: u.id });
-    res.json({ user: { id: u.id, email: u.email, displayName: u.display_name, role: u.role } });
+    res.json({ user: { id: u.id, login: u.login, displayName: u.display_name, role: u.role } });
   });
 
   r.post('/logout', async (req, res) => {
@@ -120,7 +151,6 @@ export function authRouter(db: Db, cfg: Config) {
     const hash = await hashPassword(body.newPassword);
     await withTransaction(db, async (c) => {
       await c.query('UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1', [user.id, hash]);
-      // Cierra el resto de sesiones del usuario.
       await c.query('DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2', [user.id, req.sessionTokenHash]);
       await audit(c, user.id, 'auth.password_changed', { type: 'user', id: user.id });
     });

@@ -51,7 +51,7 @@ describe('registro de profesores', () => {
     const c = client(app);
     const res = await c.post('/api/auth/register-teacher', body);
     expect(res.status).toBe(201);
-    expect(res.body.user).toMatchObject({ email: 'profe@centro.test', role: 'teacher' });
+    expect(res.body.user).toMatchObject({ login: 'profe@centro.test', role: 'teacher' });
     const me = await c.get('/api/auth/me');
     expect(me.body.user.role).toBe('teacher');
   });
@@ -151,13 +151,13 @@ describe('login y sesiones', () => {
 
 describe('protección CSRF', () => {
   it('rechaza peticiones mutantes sin Origin', async () => {
-    const res = await request(app).post('/api/auth/login').send({ email: 'x@y.test', password: 'x' });
+    const res = await request(app).post('/api/auth/login').send({ login: 'x@y.test', password: 'x' });
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('bad_origin');
   });
 
   it('rechaza Origin ajeno', async () => {
-    const res = await request(app).post('/api/auth/login').set('Origin', 'https://evil.test').send({ email: 'x@y.test', password: 'x' });
+    const res = await request(app).post('/api/auth/login').set('Origin', 'https://evil.test').send({ login: 'x@y.test', password: 'x' });
     expect(res.status).toBe(403);
   });
 
@@ -166,7 +166,7 @@ describe('protección CSRF', () => {
       .post('/api/auth/login')
       .set('Origin', ORIGIN)
       .type('form')
-      .send('email=x@y.test&password=x');
+      .send('login=x@y.test&password=x');
     expect(res.status).toBe(415);
   });
 });
@@ -256,12 +256,12 @@ describe('roles y administración', () => {
 describe('CLI create-admin', () => {
   it('crea el admin y registra la auditoría', async () => {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('npx', ['tsx', 'src/create-admin-cli.ts'], {
+    execFileSync('npx', ['tsx', new URL('../src/create-admin-cli.ts', import.meta.url).pathname], {
       env: { ...process.env, DATABASE_URL: cfg.DATABASE_URL, ADMIN_EMAIL: 'Jefe@Centro.test', ADMIN_PASSWORD: 'una-contraseña-admin-larga' },
       stdio: 'pipe',
     });
-    const { rows } = await db.query(`SELECT u.email, u.role, a.action FROM users u JOIN audit_events a ON a.actor_id = u.id`);
-    expect(rows).toEqual([{ email: 'jefe@centro.test', role: 'admin', action: 'admin.bootstrap' }]);
+    const { rows } = await db.query(`SELECT u.login, u.role, a.action FROM users u JOIN audit_events a ON a.actor_id = u.id`);
+    expect(rows).toEqual([{ login: 'jefe@centro.test', role: 'admin', action: 'admin.bootstrap' }]);
     expect((await client(app).login('jefe@centro.test', 'una-contraseña-admin-larga')).status).toBe(200);
   });
 });

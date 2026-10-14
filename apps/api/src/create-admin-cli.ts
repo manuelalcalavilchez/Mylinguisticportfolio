@@ -23,9 +23,9 @@ try {
   await migrate(db);
   const hash = await hashPassword(ADMIN_PASSWORD);
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO users (email, display_name, password_hash, role)
+    `INSERT INTO users (login, display_name, password_hash, role)
      VALUES (lower($1), $2, $3, 'admin')
-     ON CONFLICT ((lower(email))) DO UPDATE SET role = 'admin', password_hash = EXCLUDED.password_hash, status = 'active'
+     ON CONFLICT ((lower(login))) DO UPDATE SET role = 'admin', password_hash = EXCLUDED.password_hash, status = 'active'
      RETURNING id`,
     [ADMIN_EMAIL.trim(), ADMIN_NAME ?? 'Administrador', hash],
   );

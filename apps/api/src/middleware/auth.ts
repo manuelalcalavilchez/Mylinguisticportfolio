@@ -6,7 +6,7 @@ import { forbidden, unauthorized } from '../lib/errors.js';
 export type Role = 'admin' | 'teacher' | 'student';
 export interface SessionUser {
   id: string;
-  email: string;
+  login: string;
   displayName: string;
   role: Role;
 }
@@ -29,15 +29,15 @@ export function loadSession(db: Db) {
     const token: unknown = req.cookies?.[SESSION_COOKIE];
     if (typeof token !== 'string' || token.length < 20 || token.length > 100) return next();
     const tokenHash = hashToken(token);
-    const { rows } = await db.query<{ id: string; email: string; display_name: string; role: Role }>(
-      `SELECT u.id, u.email, u.display_name, u.role
+    const { rows } = await db.query<{ id: string; login: string; display_name: string; role: Role }>(
+      `SELECT u.id, u.login, u.display_name, u.role
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`,
       [tokenHash],
     );
     const row = rows[0];
     if (row) {
-      req.user = { id: row.id, email: row.email, displayName: row.display_name, role: row.role };
+      req.user = { id: row.id, login: row.login, displayName: row.display_name, role: row.role };
       req.sessionTokenHash = tokenHash;
     }
     next();
