@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { Config } from '../config.js';
@@ -23,10 +23,20 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
-export function authLimiter(cfg: Config, limit = 20) {
+/**
+ * Límite de intentos. En un aula todo el alumnado puede compartir IP pública, así que:
+ *  - login: por IP + usuario (el bloqueo por cuenta tras 5 fallos protege cada cuenta),
+ *  - registro y demás: por IP, con margen para una clase entera.
+ */
+export function authLimiter(cfg: Config, limit = 150, perLogin = false) {
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: cfg.NODE_ENV === 'test' ? 10_000 : limit,
+    keyGenerator: (req) => {
+      const ip = ipKeyGenerator(req.ip ?? '');
+      const login = perLogin && typeof req.body?.login === 'string' ? req.body.login.trim().toLowerCase().slice(0, 254) : '';
+      return login ? `${ip}:${login}` : ip;
+    },
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     message: { error: 'too_many_requests', message: 'Demasiados intentos. Prueba más tarde.' },
@@ -37,6 +47,7 @@ export function authRouter(db: Db, cfg: Config) {
   const r = Router();
   const secureCookie = cfg.APP_ORIGIN.startsWith('https://');
   const limiter = authLimiter(cfg);
+  const loginLimiter = authLimiter(cfg, 20, true);
 
   async function startSession(res: Response, userId: string) {
     const token = newToken();
@@ -101,7 +112,7 @@ export function authRouter(db: Db, cfg: Config) {
     res.status(201).json({ user: { id, login: body.username, displayName: body.displayName, role: 'student' } });
   });
 
-  r.post('/login', limiter, async (req, res) => {
+  r.post('/login', loginLimiter, async (req, res) => {
     const body = z.object({ login: loginIdSchema, password: z.string().max(200) }).parse(req.body);
     const { rows } = await db.query<{
       id: string; login: string; display_name: string; role: string; password_hash: string;

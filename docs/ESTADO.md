@@ -1,61 +1,103 @@
 # Estado del proyecto
 
-Fecha: 2026-10-14 · Versión 0.1.0
+Fecha: 2026-10-14 · Versión 1.0.0 (MVP del piloto)
 
-## Fase 0 — Inspección (completada)
+Leyenda: **Probado** = cubierto por pruebas automáticas que se han ejecutado y pasan.
+**Probado (e2e)** = además verificado en navegador real, en escritorio y móvil, contra el contenedor Docker de producción.
 
-- Directorio de trabajo vacío: no había proyecto previo; se inicializó un repositorio Git nuevo. No se sobrescribió nada.
-- Herramientas disponibles: Node 22, npm 10, Docker 29, PostgreSQL 16, Git.
-- Decisión principal: adaptar la arquitectura de la especificación a un **piloto pequeño** (ver README):
-  2 contenedores, almacenamiento local en volumen en vez de S3, sesiones en Postgres en vez de Redis,
-  recuperación de acceso por enlace del admin en vez de email.
-- Dependencias de desarrollo fijadas a TypeScript 6.0 porque typescript-eslint aún no admite TypeScript 7.
+## Fase 0 — Inspección
+Directorio vacío: el proyecto se creó de cero con Git. Herramientas disponibles: Node 22, Docker 29, PostgreSQL 16.
+Adaptaciones al servidor pequeño: 2 contenedores, almacenamiento en volumen en vez de S3, sesiones en Postgres en vez
+de Redis y recuperación de acceso sin email. TypeScript se fija en la versión 6.0 por compatibilidad con typescript-eslint.
 
-## Fase 1 — Base (completada)
-
+## Fase 1 — Base
 | Elemento | Estado |
 |---|---|
-| Monorepo (npm workspaces), lint, typecheck, build | Implementado y probado |
-| Migraciones SQL versionadas (001 auth, 002 dominio completo) | Implementado y probado (idempotentes) |
-| Registro de profesor con código, login, logout, `/me` | Implementado y probado |
-| Cambio de contraseña (cierra otras sesiones) | Implementado y probado |
-| Recuperación por enlace de un solo uso | Implementado y probado (uso único, caducidad) |
-| Bloqueo por intentos fallidos + rate limit | Implementado y probado (bloqueo) |
-| Roles admin/teacher/student y control en backend | Implementado y probado |
-| Gestión de usuarios por admin (crear, activar/desactivar) | Implementado y probado |
-| CSRF (Origin + JSON), cabeceras de seguridad, noindex | Implementado y probado |
-| Auditoría de eventos sensibles | Implementado y probado |
-| CLI para crear el primer admin | Implementado y probado (y bug corregido durante la validación) |
-| Frontend: login, registro, recuperación, panel por rol, gestión de usuarios | Implementado; compila y se sirve desde el contenedor. **Sin tests automáticos de navegador todavía** |
-| Docker (imagen única + Postgres con límites de memoria) | Probado: arranca, migra, health check `healthy` |
-| Backup y restauración | Probado de extremo a extremo |
+| Registro de profesor con código, login, logout, cambio de contraseña | Probado (e2e) |
+| Bloqueo tras 5 fallos; rate limit por IP+usuario (aulas con IP compartida) | Probado |
+| Recuperación con enlace de un solo uso (admin y profesor) | Probado |
+| CSRF (Origin + JSON), CSP, cabeceras, `noindex` | Probado |
+| Auditoría de acciones sensibles sin secretos | Probado |
 
-### Comandos ejecutados y resultados
+## Fase 2 — Grupos
+| Elemento | Estado |
+|---|---|
+| Crear, editar y archivar grupos; proyecto con actividades por defecto | Probado |
+| Código de invitación: caducidad, límite de usos (1 uso = invitación individual), revocación; solo se guarda su hash | Probado |
+| Alta de alumnado con código, **sin email** | Probado (e2e) |
+| Retirar y reincorporar alumnos; un retirado no vuelve por su cuenta | Probado |
+| Aislamiento profesor A / profesor B; el admin no lee grupos ni portfolios | Probado (e2e parcial) |
+
+## Fase 3 — Portfolio
+| Elemento | Estado |
+|---|---|
+| Plantilla v1 versionada: Home, Passport (idiomas, autoevaluación MCER orientativa, certificados), Biography (historia, objetivos, checklist *can-do*), Dossier | Probado |
+| Guardado automático con indicador; guardado parcial; validación de tipos y longitudes | Probado (e2e) |
+| Control de concurrencia (dos pestañas): conflicto 409 en lugar de sobrescribir | Probado |
+| Progreso individual y del grupo (orientativo) | Probado |
+| Vista previa | Probado (e2e) |
+
+## Fase 4 — Evidencias y evaluación
+| Elemento | Estado |
+|---|---|
+| Evidencias con título, fecha, lengua, destreza, actividad, enlace y reflexión (4 preguntas) | Probado |
+| Subida con tipo detectado por contenido (PDF, imagen, audio, vídeo); límite de tamaño; nombres aleatorios | Probado (e2e) |
+| Descarga autorizada; enlaces firmados de 5 min; caducidad y manipulación rechazadas | Probado |
+| Archivos servidos con `CSP: sandbox` y `nosniff` | Probado |
+| Entrega, devolución con comentario, corrección y aceptación | Probado (e2e) |
+| Comentarios por sección y rúbrica configurable con validación de puntuaciones | Probado |
+
+## Fase 5 — Publicación
+| Elemento | Estado |
+|---|---|
+| Estados `private_draft → publication_requested → approved → published → revoked` (+ `changes_requested`), validados en backend | Probado (no se pueden saltar) |
+| El alumno elige secciones, evidencias aceptadas y nombre público | Probado (e2e) |
+| Requisitos para aprobar: autorización registrada, solo evidencias aceptadas, sin emails, teléfonos ni usuario en el contenido | Probado |
+| Snapshot congelado; editar el borrador no altera lo publicado | Probado |
+| La URL pública no expone ids, usuario, grupo, centro ni claves de archivos | Probado |
+| Retirada por alumno, profesor o admin; URL y archivos dejan de servirse; el portfolio privado se conserva | Probado (e2e) |
+| Retirar la autorización retira las publicaciones | Probado |
+| Interruptor `PUBLICATION_ENABLED` (por defecto `false`) | Probado |
+| Indexación desactivada por defecto (`noindex`) | Probado |
+
+## Fase 6 — Producción
+| Elemento | Estado |
+|---|---|
+| Imagen Docker única, usuario sin root, health check, límites de memoria | Probado (arranca `healthy`, unos 30 MB) |
+| Seed de datos ficticios (bloqueado en producción salvo `SEED_FORCE`) | Probado |
+| Exportación de datos propios (JSON) y borrado definitivo de cuenta por el admin, archivos incluidos | Probado |
+| Backup y restauración con archivos reales | Probado (Compose); el script de EasyPanel no se ha ejecutado contra EasyPanel |
+| Guía EasyPanel para 192.168.1.134 | Escrita; **no desplegada desde aquí** (sin acceso a esa red) |
+
+## Resultados de la última verificación
 
 ```
 npm run lint        -> 0 errores, 0 avisos
 npm run typecheck   -> OK (api y web)
-npm test            -> 27/27 pruebas superadas (Vitest + Supertest contra Postgres real)
-npm run build       -> OK (web: 269 KB JS / 85 KB gzip)
-docker compose up   -> app healthy; migraciones 001 y 002 aplicadas
-E2E con curl        -> SPA servida; login sin Origin = 403; login y alta de profesor OK; CSP y X-Robots-Tag presentes
-backup.sh / restore.sh -> datos y archivos borrados se recuperan; health ok tras restaurar
+npm test            -> 84/84 (Vitest + Supertest contra PostgreSQL real; 4 archivos)
+npm run build       -> OK (web: 331 KB JS / 99 KB gzip)
+npm run test:e2e    -> 4/4 (Chromium escritorio + Pixel 7), local y contra el contenedor Docker de producción
+docker compose      -> app healthy; migraciones 001-003 aplicadas; create-admin y seed OK
+backup/restore      -> usuarios 8→8 y archivos 2→2 recuperados tras borrarlos
 ```
 
-Nota: la imagen Docker se construyó en un entorno con proxy, usando una variante temporal del Dockerfile que solo
-añadía el certificado del proxy en la etapa de build. El Dockerfile del repositorio no contiene esa modificación.
+Fallos reales detectados y corregidos durante la verificación:
+- `create-admin` fallaba por tipos de parámetros en Postgres.
+- En zod 4, los valores por defecto dentro de `.partial()` hacían que un PATCH sobrescribiera campos no enviados (evidencias, actividades y grupos).
+- El detector de privacidad confundía cifras de los identificadores internos con teléfonos.
+- El rate limit por IP habría bloqueado a una clase entera detrás de la misma IP.
 
-## Pendiente
-
-- **Fase 2 — Grupos**: crear grupo, código/invitación con caducidad, límite de usos y revocación; alta de alumnos; retirar acceso. Pruebas de aislamiento profesor A / profesor B.
-- **Fase 3 — Portfolio**: plantilla versionada con Home, Passport, Biography y Dossier; guardado de borradores; vista previa.
-- **Fase 4 — Evidencias**: subida de archivos (validación de tipo real, tamaño, nombres aleatorios), descarga autorizada, reflexiones, revisión y rúbrica.
-- **Fase 5 — Publicación**: máquina de estados, snapshot congelado, URL pública, retirada, consentimientos.
-- **Fase 6 — Producción**: HTTPS en el servidor real, cron de backups fuera del servidor, piloto.
-- Tests de navegador/móvil (Playwright) cuando exista el flujo de alumno.
+Nota: la imagen se construyó en un entorno con proxy, usando una variante temporal del Dockerfile que solo añadía su
+certificado en la etapa de build. El Dockerfile del repositorio no la incluye.
 
 ## Limitaciones conocidas
+- Por IP local y HTTP (192.168.1.134), solo se accede desde la red local y sin cifrado. Para acceso externo hace falta un dominio con HTTPS (ver EASYPANEL.md).
+- Rate limiting en memoria: válido con una instancia.
+- Sin envío de emails: la recuperación depende del profesor o el admin.
+- El detector de datos personales es una ayuda; la revisión del profesor sigue siendo necesaria (no detecta nombres propios ni caras en fotos).
+- Plantilla v1 solo en inglés para 4.º ESO; otras plantillas e idiomas quedan para futuras versiones.
+- La tabla `consents` registra una referencia a la autorización; no sustituye el procedimiento legal del centro.
 
-- Rate limiting en memoria: correcto con una sola instancia; si se escala a varias, hay que moverlo a Postgres o Redis.
-- No hay envío de emails: la recuperación depende del admin.
-- La tabla `consents` existe, pero no sustituye la revisión legal del centro.
+## Fuera del MVP (siguientes pasos posibles)
+Otras plantillas e idiomas · importación/exportación de portfolios completos con archivos · integración con LMS ·
+asistente de IA con revisión docente · varios docentes por grupo y organizaciones · emails transaccionales.

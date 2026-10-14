@@ -1,28 +1,28 @@
 # Checklist de puesta en marcha del piloto
 
 ## Servidor
-- [ ] VPS con ≥ 1 vCPU, 1 GB RAM, 10 GB disco; actualizaciones de seguridad automáticas.
-- [ ] Firewall: solo 22 (SSH con clave), 80 y 443 abiertos. Postgres y el puerto 3000 nunca expuestos.
-- [ ] Swap de 1 GB (evita caídas por memoria en el build).
+- [ ] Al menos 1 vCPU, 1 GB RAM y 10 GB de disco; actualizaciones de seguridad automáticas.
+- [ ] Postgres y el puerto interno de la app no expuestos a Internet.
+- [ ] Swap de 1 GB (evita fallos de memoria durante el build).
 
 ## Configuración
-- [ ] `.env` creado desde `.env.example`, con permisos `600`.
-- [ ] `SESSION_SECRET` generado con `openssl rand -hex 32`; contraseña de Postgres larga y aleatoria.
-- [ ] `APP_ORIGIN` = URL HTTPS exacta; `TRUST_PROXY=1` con proxy delante.
+- [ ] `SESSION_SECRET` aleatorio de 64 caracteres hex; contraseña de Postgres larga.
+- [ ] `APP_ORIGIN` = URL exacta de acceso. `TRUST_PROXY` según haya o no proxy delante.
 - [ ] `TEACHER_SIGNUP_CODE` vacío salvo durante el alta de profesores.
-- [ ] HTTPS activo y redirección desde HTTP.
-- [ ] Volumen persistente para `/data/uploads`.
+- [ ] Volumen persistente montado en `/data/uploads`.
+- [ ] `PUBLICATION_ENABLED=false` hasta completar la revisión legal.
+- [ ] HTTPS si se accede desde fuera de la red local.
 
 ## Operación
-- [ ] Admin creado con contraseña ≥ 12 caracteres.
+- [ ] Admin creado (contraseña de 12 o más caracteres). Datos de demostración borrados.
 - [ ] `/api/health` devuelve `{"status":"ok"}`.
-- [ ] Cron diario de `scripts/backup.sh` (idealmente con `BACKUP_PASSPHRASE`).
-- [ ] Backups copiados fuera del servidor.
-- [ ] Restauración probada en el servidor real al menos una vez.
-- [ ] Logs revisados: no contienen contraseñas, tokens ni contenido de alumnos.
+- [ ] Backup diario programado y copiado fuera del servidor.
+- [ ] **Restauración probada** en el servidor real al menos una vez.
+- [ ] Logs revisados: sin contraseñas, tokens ni contenido de alumnos (la app no los registra).
 
 ## Legal y centro (antes de usar con alumnado real)
-- [ ] Revisión RGPD/LOPDGDD con el centro: base legal, encargado del tratamiento, información a familias.
-- [ ] Criterio para datos de menores y derechos de imagen.
-- [ ] Política de retención y borrado definida.
-- [ ] Publicación pública **desactivada** hasta completar la fase 5 y esta revisión.
+- [ ] Revisión RGPD/LOPDGDD con el centro: base legal, información a las familias, encargo del tratamiento.
+- [ ] Procedimiento de autorización de publicación y derechos de imagen (menores de 14 años: consentimiento de los tutores).
+- [ ] Política de retención: qué se borra al final del curso (el admin puede borrar cuentas con sus archivos).
+- [ ] Solo entonces: `PUBLICATION_ENABLED=true`.
+- [ ] Recordar a profesores y alumnos que no suban fotos de otras personas ni datos personales.

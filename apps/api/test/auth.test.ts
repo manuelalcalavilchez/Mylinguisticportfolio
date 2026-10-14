@@ -149,6 +149,17 @@ describe('login y sesiones', () => {
   });
 });
 
+describe('rate limit', () => {
+  it('login: límite por IP+usuario, no por IP (aulas con IP compartida)', async () => {
+    const prod = createApp(db, testConfig({ NODE_ENV: 'development' }));
+    for (let i = 0; i < 20; i++) await client(prod).login('mismo@centro.test', 'x-incorrecta');
+    const blocked = await client(prod).login('mismo@centro.test', 'x-incorrecta');
+    expect(blocked.status).toBe(429);
+    const other = await client(prod).login('otro@centro.test', 'x-incorrecta');
+    expect(other.status).toBe(401);
+  });
+});
+
 describe('protección CSRF', () => {
   it('rechaza peticiones mutantes sin Origin', async () => {
     const res = await request(app).post('/api/auth/login').send({ login: 'x@y.test', password: 'x' });

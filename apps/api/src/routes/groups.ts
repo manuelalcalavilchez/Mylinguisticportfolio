@@ -78,7 +78,7 @@ export function groupsRouter(db: Db, cfg: Config) {
   });
 
   // Unirse a otro grupo con un código (alumno ya registrado)
-  r.post('/join', requireRole('student'), authLimiter(cfg, 30), async (req, res) => {
+  r.post('/join', requireRole('student'), authLimiter(cfg), async (req, res) => {
     const { code } = z.object({ code: z.string().min(4).max(40) }).parse(req.body);
     const groupId = await withTransaction(db, (c) => joinGroupWithCode(c, req.user!.id, code));
     res.json({ groupId });
