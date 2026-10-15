@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { ErrorBox, useAction } from '../lib/ui';
+import { ErrorBox, SectionStamps, useAction } from '../lib/ui';
 
 export function LoginPage() {
   const { user, setUser } = useAuth();
@@ -22,24 +22,49 @@ export function LoginPage() {
   };
 
   return (
-    <main className="card narrow">
-      <h1>Iniciar sesión</h1>
-      <form onSubmit={onSubmit}>
-        <label htmlFor="login">Email o nombre de usuario</label>
-        <input id="login" autoComplete="username" required value={login} onChange={(e) => setLogin(e.target.value)} />
-        <label htmlFor="password">Contraseña</label>
-        <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        <ErrorBox error={error} />
-        <button type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
-      </form>
-      <p className="muted">
-        ¿Eres alumno y tienes un código de tu profesor? <Link to="/unirse">Crear mi cuenta</Link>
-        <br />
-        ¿Eres profesor y tienes código de registro? <Link to="/registro-profesor">Registro de profesor</Link>
-        <br />
-        ¿Olvidaste la contraseña? Pide a tu profesor (o al administrador) un enlace de recuperación.
-      </p>
+    <main className="auth-wrap">
+      <div className="auth-hero">
+        <h1>Your languages, your story.</h1>
+        <p className="lede">Tu portfolio de inglés: preséntate, valora tu progreso, guarda tus mejores trabajos y diséñalo a tu manera.</p>
+        <SectionStamps sections={[
+          { key: 'h', label: 'Home', done: 1, total: 1 },
+          { key: 'p', label: 'Passport', done: 1, total: 1 },
+          { key: 'b', label: 'Biography', done: 1, total: 2 },
+          { key: 'd', label: 'Dossier', done: 0, total: 1 },
+        ]} />
+      </div>
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Entrar</h2>
+        <form onSubmit={onSubmit}>
+          <label htmlFor="login">Usuario o email</label>
+          <input id="login" autoComplete="username" required value={login} onChange={(e) => setLogin(e.target.value)} />
+          <label htmlFor="password">Contraseña</label>
+          <PasswordInput id="password" autoComplete="current-password" value={password} onChange={setPassword} />
+          <ErrorBox error={error} />
+          <button type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        </form>
+        <div className="auth-links">
+          <span>¿Primera vez y tienes el código de tu profesor? <Link to="/unirse">Crear mi cuenta de alumno</Link></span>
+          <span className="small muted">¿Eres profesor? <Link to="/registro-profesor">Registro de profesorado</Link></span>
+          <span className="small muted">¿Has olvidado la contraseña? Pide a tu profesor un enlace para cambiarla.</span>
+        </div>
+      </div>
     </main>
+  );
+}
+
+/** Campo de contraseña con botón para mostrarla (menos errores al teclear en el móvil). */
+export function PasswordInput({ id, value, onChange, autoComplete, minLength }: {
+  id: string; value: string; onChange: (v: string) => void; autoComplete: string; minLength?: number;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="row">
+      <input id={id} type={show ? 'text' : 'password'} autoComplete={autoComplete} required minLength={minLength} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button type="button" className="ghost small" onClick={() => setShow(!show)} aria-pressed={show} aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+        {show ? 'Ocultar' : 'Ver'}
+      </button>
+    </div>
   );
 }
 
@@ -67,17 +92,17 @@ export function RegisterStudentPage() {
   };
 
   return (
-    <main className="card narrow">
-      <h1>Crear mi cuenta de alumno</h1>
-      <p className="muted">No necesitas email. Usa tu nombre de pila y un nombre de usuario que recuerdes.</p>
+    <main className="page narrow panel">
+      <h1>Crea tu cuenta</h1>
+      <p className="muted">No necesitas email. Solo el código de tu grupo, tu nombre de pila y un usuario que recuerdes.</p>
       <form onSubmit={onSubmit}>
         <label htmlFor="code">Código del grupo (te lo da tu profesor)</label>
         <input id="code" required autoComplete="off" placeholder="XXXXX-XXXXX" value={form.inviteCode} onChange={set('inviteCode')} />
         <label htmlFor="name">Tu nombre de pila</label>
         <input id="name" required maxLength={80} autoComplete="given-name" value={form.displayName} onChange={set('displayName')} />
-        <label htmlFor="username">Nombre de usuario (3-30 letras, números, . _ -)</label>
+        <label htmlFor="username">Nombre de usuario<span className="hint">Entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo. Por ejemplo: alba.r</span></label>
         <input id="username" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,29}" autoComplete="username" value={form.username} onChange={set('username')} />
-        <label htmlFor="password">Contraseña (mínimo 10 caracteres)</label>
+        <label htmlFor="password">Contraseña<span className="hint">Mínimo 10 caracteres. Una frase corta es fácil de recordar: «me gusta el verano»</span></label>
         <input id="password" type="password" required minLength={10} autoComplete="new-password" value={form.password} onChange={set('password')} />
         <label htmlFor="password2">Repite la contraseña</label>
         <input id="password2" type="password" required minLength={10} autoComplete="new-password" value={form.password2} onChange={set('password2')} />
@@ -107,7 +132,7 @@ export function RegisterTeacherPage() {
   };
 
   return (
-    <main className="card narrow">
+    <main className="page narrow panel">
       <h1>Registro de profesor</h1>
       <form onSubmit={onSubmit}>
         <label htmlFor="name">Nombre visible</label>
@@ -143,7 +168,7 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <main className="card narrow">
+    <main className="page narrow panel">
       <h1>Nueva contraseña</h1>
       {done ? (
         <p>Contraseña actualizada. <Link to="/login">Inicia sesión</Link></p>
@@ -168,7 +193,7 @@ export function AccountPage() {
   const { busy, error, run } = useAction();
   if (!user) return null;
   return (
-    <main className="card narrow">
+    <main className="page narrow panel">
       <h1>Mi cuenta</h1>
       <p className="muted">Usuario: {user.login}</p>
       <h2>Cambiar contraseña</h2>

@@ -1,3 +1,5 @@
+import type { Design } from './design';
+
 export type Section = 'home' | 'passport' | 'biography' | 'dossier';
 export type Skill = 'writing' | 'speaking' | 'listening' | 'reading' | 'cultural_project' | 'free_choice';
 export type Level = '' | 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
@@ -76,6 +78,7 @@ export interface PortfolioResponse {
     version: number;
     templateVersion: number;
     content: PortfolioContent;
+    design: Design;
     publicationRequest: { sections: Section[]; evidenceIds: string[]; publicName: string } | null;
     updatedAt: string;
     editable: boolean;
@@ -97,8 +100,25 @@ export interface PublicSnapshot {
   course: string;
   sections: PortfolioContent;
   evidences: (Evidence & { hasFile: boolean })[];
+  design?: Partial<Design>;
   publishedAt?: string;
 }
+
+/** Nombre corto (sellos, navegación). */
+export const SECTION_SHORT: Record<Section, string> = {
+  home: 'Home',
+  passport: 'Passport',
+  biography: 'Biography',
+  dossier: 'Dossier',
+};
+
+/** Qué se hace en cada sección, explicado al alumno. */
+export const SECTION_HELP: Record<Section, string> = {
+  home: 'Preséntate: quién eres, qué te gusta y qué quieres conseguir este curso.',
+  passport: 'Tus idiomas y cómo valoras tu inglés en cada destreza. Es una autoevaluación, no un examen.',
+  biography: 'Tu historia con los idiomas, cómo aprendes mejor y tus objetivos. Marca lo que ya sabes hacer.',
+  dossier: 'Tus mejores trabajos: sube un archivo o un enlace y cuenta qué aprendiste con cada uno.',
+};
 
 export const SECTION_LABEL: Record<Section, string> = {
   home: 'Home',

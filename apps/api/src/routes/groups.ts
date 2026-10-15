@@ -8,7 +8,9 @@ import { notFound } from '../lib/errors.js';
 import { generateInviteCode, hashInviteCode, joinGroupWithCode } from '../lib/invites.js';
 import { revokeAllForStudent } from '../lib/publication.js';
 import { createResetLink } from '../lib/resets.js';
-import { uuidSchema } from '../lib/validation.js';
+import { normalizeDesign } from '../lib/design.js';
+import { computeProgress, type PortfolioContent } from '../lib/template.js';
+import { uuidSchema, type Skill } from '../lib/validation.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { authLimiter } from './auth.js';
 import { createProject } from './projects.js';
@@ -56,6 +58,27 @@ export function groupsRouter(db: Db, cfg: Config) {
           WHERE m.user_id = $1 AND m.status = 'active' AND g.status = 'active' ORDER BY m.joined_at`,
         [u.id],
       );
+      // Resumen de cada portfolio propio (progreso y aspecto) para el panel del alumno.
+      const ports = await db.query<{ id: string; project_id: string; status: string; content: PortfolioContent; design: unknown }>(
+        'SELECT id, project_id, status, content, design FROM portfolios WHERE student_id = $1',
+        [u.id],
+      );
+      const evs = await db.query<{ portfolio_id: string; skill: Skill; status: string }>(
+        'SELECT e.portfolio_id, e.skill, e.status FROM evidences e JOIN portfolios p ON p.id = e.portfolio_id WHERE p.student_id = $1',
+        [u.id],
+      );
+      const byProject = new Map(ports.rows.map((p) => {
+        const d = normalizeDesign(p.design);
+        return [p.project_id, {
+          id: p.id,
+          status: p.status,
+          progress: computeProgress(p.content, evs.rows.filter((e) => e.portfolio_id === p.id)),
+          look: { palette: d.palette, accent: d.accent, avatar: d.cover.avatar },
+        }];
+      }));
+      for (const g of rows as { projects: { id: string; portfolio?: unknown }[] | null }[]) {
+        for (const pr of g.projects ?? []) pr.portfolio = byProject.get(pr.id) ?? null;
+      }
       return res.json({ groups: rows });
     }
     res.json({ groups: [] });

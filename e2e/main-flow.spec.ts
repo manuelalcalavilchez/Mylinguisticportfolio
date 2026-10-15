@@ -47,8 +47,8 @@ test('flujo principal profesor → alumno → publicación → retirada', async 
   await student.getByLabel('Repite la contraseña').fill(PASSWORD);
   await student.getByRole('button', { name: 'Crear cuenta' }).click();
   await expect(student.getByRole('heading', { name: 'Hi, Alba!' })).toBeVisible();
-  await student.getByRole('button', { name: /Abrir: My Linguistic Portfolio/ }).click();
-  await expect(student.getByRole('tab', { name: /Home/ })).toBeVisible();
+  await student.getByRole('button', { name: 'Empezar mi portfolio' }).click();
+  await expect(student.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
 
   await student.getByRole('textbox', { name: /About me/ }).fill('I love music <b>and</b> English songs.');
   await expect(student.getByText('Todos los cambios guardados ✓')).toBeVisible({ timeout: 10_000 });
@@ -56,7 +56,7 @@ test('flujo principal profesor → alumno → publicación → retirada', async 
   await expect(student.getByRole('textbox', { name: /About me/ })).toHaveValue('I love music <b>and</b> English songs.');
 
   // Evidencia con archivo
-  await student.getByRole('tab', { name: /My Dossier/ }).click();
+  await student.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: /Dossier/ }).click();
   await student.getByRole('button', { name: '+ Añadir evidencia' }).click();
   await student.getByLabel('Subir archivo').setInputFiles({ name: 'essay.pdf', mimeType: 'application/pdf', buffer: PDF });
   await expect(student.getByText('Archivo subido ✓')).toBeVisible();
@@ -78,21 +78,29 @@ test('flujo principal profesor → alumno → publicación → retirada', async 
   await expect(teacher.getByText('Registrada')).toBeVisible();
   await teacher.locator('#main').getByRole('link', { name: 'My Linguistic Portfolio' }).click();
   await teacher.getByRole('link', { name: 'Alba' }).click();
-  await teacher.getByRole('tab', { name: /My Dossier/ }).click();
+  await teacher.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: /Dossier/ }).click();
   await teacher.getByRole('button', { name: 'Aceptar' }).click();
   await expect(teacher.locator('.badge', { hasText: 'Aceptada' })).toBeVisible();
   const portfolioUrl = teacher.url();
 
-  // ---- Alumno: solicita publicación
+  // ---- Alumno: diseña su portfolio
   await student.reload();
-  await student.getByRole('tab', { name: 'Publicación' }).click();
+  await student.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: /Diseño/ }).click();
+  await student.getByRole('button', { name: 'Póster' }).click();
+  await student.getByRole('button', { name: 'Atardecer' }).click();
+  await student.getByLabel(/Mi lema/).fill('Every word is a new door');
+  await expect(student.locator('.studio-preview .pf-layout-poster')).toBeVisible();
+  await expect(student.getByText('Todos los cambios guardados ✓')).toBeVisible({ timeout: 10_000 });
+
+  // ---- Alumno: solicita publicación
+  await student.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: 'Publicar' }).click();
   await student.getByLabel(/Nombre público/).fill('Alba R.');
   await student.getByRole('button', { name: 'Enviar a mi profesor' }).click();
   await expect(student.getByText('Solicitud enviada.')).toBeVisible();
 
   // ---- Profesor: aprueba y publica
   await teacher.goto(portfolioUrl);
-  await teacher.getByRole('tab', { name: 'Publicación' }).click();
+  await teacher.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: 'Publicar' }).click();
   await teacher.getByRole('button', { name: 'Aprobar' }).click();
   await teacher.getByRole('button', { name: 'Publicar ahora' }).click();
   const link = teacher.locator('.notice a[href*="/p/"]');
@@ -107,10 +115,13 @@ test('flujo principal profesor → alumno → publicación → retirada', async 
   await expect(visitor.getByText('I love music <b>and</b> English songs.')).toBeVisible();
   await expect(visitor.locator('b', { hasText: 'and' })).toHaveCount(0);
   await expect(visitor.getByText(username)).toHaveCount(0);
+  // Se publica con el diseño elegido
+  await expect(visitor.locator('.pf.pf-layout-poster')).toBeVisible();
+  await expect(visitor.getByText('Every word is a new door')).toBeVisible();
 
   // ---- Alumno retira la publicación
   await student.reload();
-  await student.getByRole('tab', { name: 'Publicación' }).click();
+  await student.getByRole('navigation', { name: 'Partes del portfolio' }).getByRole('button', { name: 'Publicar' }).click();
   student.once('dialog', (d) => void d.accept());
   await student.getByRole('button', { name: 'Retirar publicación' }).click();
   await expect(student.getByRole('button', { name: 'Retirar publicación' })).toHaveCount(0);

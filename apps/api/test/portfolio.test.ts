@@ -33,6 +33,55 @@ async function save(s: Client, id: string, section: string, data: object, versio
   return s.put(`/api/portfolios/${id}/sections/${section}`, { version: v, data });
 }
 
+describe('portfolio: diseño', () => {
+  const put = async (s: Client, id: string, design: unknown) => {
+    const v = (await s.get(`/api/portfolios/${id}`)).body.portfolio.version;
+    return s.put(`/api/portfolios/${id}/design`, { version: v, design });
+  };
+
+  it('por defecto devuelve un diseño completo', async () => {
+    const { a, pa } = await setup();
+    const d = (await a.student.get(`/api/portfolios/${pa}`)).body.portfolio.design;
+    expect(d).toMatchObject({ layout: 'notebook', palette: 'ocean', font: 'modern', sectionOrder: ['home', 'passport', 'biography', 'dossier'] });
+  });
+
+  it('el alumno guarda su diseño y el profesor lo ve', async () => {
+    const { a, pa, teacher } = await setup();
+    const r = await put(a.student, pa, { layout: 'magazine', palette: 'forest', accent: '#ff8800', cardStyle: 'tape', sectionOrder: ['dossier', 'home', 'passport', 'biography'] });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const d = (await teacher.get(`/api/portfolios/${pa}`)).body.portfolio.design;
+    expect(d).toMatchObject({ layout: 'magazine', accent: '#ff8800', cardStyle: 'tape', sectionOrder: ['dossier', 'home', 'passport', 'biography'] });
+  });
+
+  it('solo admite opciones cerradas: nada de CSS, URLs ni emojis fuera de la lista', async () => {
+    const { a, pa } = await setup();
+    for (const bad of [
+      { accent: 'red; background:url(https://x)' },
+      { layout: 'custom' },
+      { stickers: ['<script>'] },
+      { stickers: Array(7).fill('⭐') },
+      { cover: { avatar: '💩' } },
+      { cover: { motto: 'x'.repeat(141) } },
+      { sectionOrder: ['home', 'home', 'passport', 'biography'] },
+      { css: 'body{}' },
+    ]) {
+      expect((await put(a.student, pa, bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+  });
+
+  it('otro alumno o el profesor no pueden cambiar el diseño', async () => {
+    const { b, pa, teacher } = await setup();
+    expect((await b.student.put(`/api/portfolios/${pa}/design`, { version: 1, design: {} })).status).toBe(404);
+    expect((await teacher.put(`/api/portfolios/${pa}/design`, { version: 1, design: {} })).status).toBe(403);
+  });
+
+  it('control de versión compartido con las secciones', async () => {
+    const { a, pa } = await setup();
+    expect((await a.student.put(`/api/portfolios/${pa}/design`, { version: 1, design: {} })).status).toBe(200);
+    expect((await a.student.put(`/api/portfolios/${pa}/sections/home`, { version: 1, data: {} })).status).toBe(409);
+  });
+});
+
 describe('portfolio: plantilla y guardado', () => {
   it('abrir el portfolio es idempotente', async () => {
     const t = await setup();

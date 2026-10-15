@@ -34,6 +34,12 @@ describe('grupos e invitaciones', () => {
     const { student } = await registerStudent(app, code.toLowerCase().replace('-', ' '), 'lucia.g');
     const groups = await student.get('/api/groups');
     expect(groups.body.groups.map((g: { id: string }) => g.id)).toEqual([groupId]);
+    // Antes de abrirlo no hay portfolio; después el panel muestra su progreso y aspecto
+    const projectId = groups.body.groups[0].projects[0].id;
+    expect(groups.body.groups[0].projects[0].portfolio).toBeNull();
+    const pid = (await student.post(`/api/projects/${projectId}/my-portfolio`)).body.portfolioId;
+    const again = (await student.get('/api/groups')).body.groups[0].projects[0].portfolio;
+    expect(again).toMatchObject({ id: pid, status: 'private_draft', progress: { percent: 0 }, look: { palette: 'ocean', avatar: '' } });
     const members = await teacher.get(`/api/groups/${groupId}`);
     expect(members.body.members.map((m: { login: string }) => m.login)).toEqual(['lucia.g']);
   });

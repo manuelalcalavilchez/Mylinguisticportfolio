@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { themeVars, withDefaults, type Design } from '../lib/design';
 import {
-  EVIDENCE_STATUS, SECTION_LABEL, SKILL_LABEL, type Evidence, type PortfolioContent, type Section,
+  EVIDENCE_STATUS, SECTION_LABEL, SECTION_SHORT, SKILL_LABEL, type Evidence, type PortfolioContent, type Section,
 } from '../lib/types';
 import { Badge, formatDate, statusTone } from '../lib/ui';
 
@@ -62,7 +63,6 @@ export function SectionView({ section, content }: { section: Section; content: P
     const h = content.home ?? {};
     return (
       <div className="view">
-        {h.title && <h3>{h.title}</h3>}
         <h4>About me</h4><p><Text value={h.aboutMe} /></p>
         <h4>Interests</h4><p><Text value={h.interests} /></p>
         <h4>My goals</h4>
@@ -121,12 +121,13 @@ export function SectionView({ section, content }: { section: Section; content: P
   );
 }
 
-export function EvidenceView({ e, fileUrl, showStatus }: { e: Evidence; fileUrl?: string; showStatus?: boolean }) {
+export function EvidenceView({ e, fileUrl, showStatus, className = 'evidence' }: { e: Evidence; fileUrl?: string; showStatus?: boolean; className?: string }) {
   return (
-    <article className="evidence">
+    <article className={className}>
       <header>
         <h4>{e.title}</h4>
-        <span className="muted">{SKILL_LABEL[e.skill]}{e.date ? ` · ${formatDate(e.date)}` : ''} · {e.language}</span>
+        <span className="skill-tag">{SKILL_LABEL[e.skill]}</span>
+        <span className="muted small">{[e.date && formatDate(e.date), e.language].filter(Boolean).join(', ')}</span>
         {showStatus && e.status && <Badge tone={statusTone(e.status)}>{EVIDENCE_STATUS[e.status]}</Badge>}
       </header>
       {e.hasFile && fileUrl && <FilePreview url={fileUrl} mime={e.fileMime} />}
@@ -141,30 +142,78 @@ export function EvidenceView({ e, fileUrl, showStatus }: { e: Evidence; fileUrl?
   );
 }
 
-/** Vista completa de solo lectura (vista previa, profesor y página pública). */
+/**
+ * Portfolio final con el diseño elegido por el alumno (vista previa, profesor y página pública).
+ * El diseño solo aporta clases y variables de opciones cerradas: el contenido sigue siendo texto escapado por React.
+ */
 export function PortfolioView({
-  content, evidences, sections = ['home', 'passport', 'biography', 'dossier'], fileUrl,
+  content, evidences, sections = ['home', 'passport', 'biography', 'dossier'], fileUrl, design: rawDesign,
+  owner, idPrefix = 'pf', footer, fallbackTitle = 'My Linguistic Portfolio',
 }: {
   content: PortfolioContent;
   evidences: Evidence[];
   sections?: Section[];
   fileUrl: (e: Evidence) => string;
+  design?: Partial<Design> | null;
+  /** Línea bajo el título: nombre público, curso... */
+  owner?: string;
+  idPrefix?: string;
+  footer?: ReactNode;
+  fallbackTitle?: string;
 }) {
+  const d = withDefaults(rawDesign);
+  const order = d.sectionOrder.filter((s) => sections.includes(s));
+  const showDossier = order.includes('dossier') || evidences.length > 0;
+  const finalOrder = showDossier && !order.includes('dossier') ? [...order, 'dossier' as Section] : order;
+  const title = content.home?.title?.trim() || fallbackTitle;
+  const cls = [
+    'pf', `pf-layout-${d.layout}`, `pf-font-${d.font}`, `pf-card-${d.cardStyle}`, `pf-corners-${d.corners}`,
+  ].join(' ');
   return (
-    <div className="portfolio-view">
-      {sections.map((s) => (
-        <section key={s}>
-          <h2>{SECTION_LABEL[s]}</h2>
-          <SectionView section={s} content={content} />
-          {s === 'dossier' && evidences.map((e) => <EvidenceView key={e.id} e={e} fileUrl={fileUrl(e)} />)}
-        </section>
-      ))}
-      {!sections.includes('dossier') && evidences.length > 0 && (
-        <section>
-          <h2>Evidence</h2>
-          {evidences.map((e) => <EvidenceView key={e.id} e={e} fileUrl={fileUrl(e)} />)}
-        </section>
-      )}
+    <div className="pf-wrap">
+    <article className={cls} style={themeVars(d) as React.CSSProperties}>
+      <header className={`pf-cover pf-pattern-${d.cover.pattern} pf-align-${d.cover.align}${d.stickers.length ? ' has-stickers' : ''}`}>
+        {d.stickers.map((st, i) => <span key={i} className={`pf-sticker s${i}`} aria-hidden="true">{st}</span>)}
+        <div className="pf-cover-row">
+          {d.cover.avatar && <div className="pf-avatar" aria-hidden="true">{d.cover.avatar}</div>}
+          <div>
+            {owner && <p className="pf-owner">{owner}</p>}
+            <h1 className="pf-title">{title}</h1>
+          </div>
+        </div>
+        {d.cover.motto && <p className="pf-motto">{d.cover.motto}</p>}
+        {finalOrder.length > 1 && (
+          <nav className="pf-toc" aria-label="Contents">
+            {finalOrder.map((s) => <a key={s} href={`#${idPrefix}-${s}`}>{SECTION_SHORT[s]}</a>)}
+          </nav>
+        )}
+      </header>
+      <div className="pf-body">
+        {finalOrder.map((s) => (
+          <section key={s} id={`${idPrefix}-${s}`} className={`pf-section pf-${s}${s === 'dossier' ? '' : ' pf-card'}`}>
+            {s === 'dossier' ? (
+              <>
+                <div className="pf-card">
+                  <h2 className="pf-h2">{SECTION_LABEL[s]}</h2>
+                  {sections.includes('dossier') && <SectionView section={s} content={content} />}
+                </div>
+                {evidences.length > 0 && (
+                  <div className="pf-evidences">
+                    {evidences.map((e) => <EvidenceView key={e.id} e={e} fileUrl={fileUrl(e)} className="evidence pf-card pf-evidence" />)}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="pf-h2">{SECTION_LABEL[s]}</h2>
+                <SectionView section={s} content={content} />
+              </>
+            )}
+          </section>
+        ))}
+      </div>
+      {footer && <footer className="pf-footer">{footer}</footer>}
+    </article>
     </div>
   );
 }

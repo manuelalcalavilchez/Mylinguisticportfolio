@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Badge, ErrorBox, Loading, formatDate, useAction, useLoad } from '../lib/ui';
+import { Badge, EmptyState, ErrorBox, Loading, formatDate, useAction, useLoad } from '../lib/ui';
 
 interface Member {
   id: string;
@@ -28,8 +28,8 @@ export function GroupPage() {
   const [inviteOpts, setInviteOpts] = useState({ expiresInDays: 14, maxUses: 40 });
   const [projectTitle, setProjectTitle] = useState('');
 
-  if (loading && !data) return <main className="card"><Loading /></main>;
-  if (!data) return <main className="card"><ErrorBox error={error} /></main>;
+  if (loading && !data) return <main className="page"><Loading /></main>;
+  if (!data) return <main className="page"><ErrorBox error={error} /></main>;
   const { group, invite, members, projects } = data;
   const active = members.filter((m) => m.status === 'active');
   const removed = members.filter((m) => m.status === 'removed');
@@ -48,14 +48,20 @@ export function GroupPage() {
   };
 
   return (
-    <main className="card">
-      <p><Link to="/">← Mis grupos</Link></p>
-      <h1>{group.name} <span className="muted">· {group.course}</span></h1>
+    <main className="page">
+      <Link className="back" to="/">Mis grupos</Link>
+      <header className="page-head">
+        <div>
+          <h1>{group.name}</h1>
+          <p className="muted">{group.course} · {active.length} {active.length === 1 ? 'alumno' : 'alumnos'}</p>
+        </div>
+        {projects[0] && <Link className="button" to={`/proyectos/${projects[0].id}`}>Ver seguimiento</Link>}
+      </header>
       {group.status === 'archived' && <p className="notice">Grupo archivado: no admite nuevas incorporaciones.</p>}
       <ErrorBox error={act.error ?? error} />
 
-      <section>
-        <h2>Proyectos</h2>
+      <section className="panel">
+        <h2 className="panel-title">Proyectos</h2>
         <ul className="list">
           {projects.map((p) => (
             <li key={p.id}><Link to={`/proyectos/${p.id}`}>{p.title}</Link> <Badge>{p.status}</Badge></li>
@@ -74,12 +80,19 @@ export function GroupPage() {
         </form>
       </section>
 
-      <section>
-        <h2>Incorporar alumnado</h2>
+      <section className="panel">
+        <h2 className="panel-title">Incorporar alumnado</h2>
         <p className="muted">
-          El código se muestra una sola vez. Para una invitación individual, genera un código de 1 uso.
-          Estado actual:{' '}
-          {invite.active ? (invite.usable ? `activo · ${invite.uses}/${invite.maxUses} usos · caduca ${formatDate(invite.expiresAt)}` : 'caducado o agotado') : 'sin código'}
+          Genera un código y compártelo en clase: tu alumnado crea su cuenta en <strong>{window.location.origin}/unirse</strong>.
+          Por seguridad, el código solo se muestra una vez (para un alumno concreto, genera uno de 1 uso).
+        </p>
+        <p>
+          Código actual:{' '}
+          {invite.active
+            ? (invite.usable
+              ? <Badge tone="ok">Activo · {invite.uses}/{invite.maxUses} usos · caduca {formatDate(invite.expiresAt)}</Badge>
+              : <Badge tone="warn">Caducado o agotado</Badge>)
+            : <Badge>Sin código</Badge>}
         </p>
         {newCode && (
           <div className="notice code-box" role="status">
@@ -108,15 +121,16 @@ export function GroupPage() {
         </form>
       </section>
 
-      <section>
-        <h2>Alumnado ({active.length})</h2>
+      <section className="panel">
+        <h2 className="panel-title">Alumnado ({active.length})</h2>
         {resetUrl && (
           <div className="notice" role="status">
             <p>Enlace de recuperación para {resetUrl.name} (un solo uso, 60 min). Entrégaselo en persona o por un canal privado:</p>
             <input readOnly value={resetUrl.url} onFocus={(e) => e.target.select()} aria-label="Enlace de recuperación" />
           </div>
         )}
-        <div className="table-wrap">
+        {active.length === 0 && <EmptyState icon="🎒" title="Todavía no hay alumnos">Genera un código arriba y compártelo en clase.</EmptyState>}
+        {active.length > 0 && <div className="table-wrap">
           <table>
             <thead><tr><th>Nombre</th><th>Usuario</th><th>Alta</th><th>Autorización publicación</th><th>Acciones</th></tr></thead>
             <tbody>
@@ -158,7 +172,7 @@ export function GroupPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
         {removed.length > 0 && (
           <details>
             <summary>Retirados ({removed.length})</summary>
@@ -177,8 +191,8 @@ export function GroupPage() {
         )}
       </section>
 
-      <section>
-        <h2>Ajustes del grupo</h2>
+      <section className="panel">
+        <h2 className="panel-title">Ajustes del grupo</h2>
         <button type="button" className="secondary" onClick={() => void act.run(async () => {
           await api(`/groups/${group.id}`, { method: 'PATCH', body: { status: group.status === 'active' ? 'archived' : 'active' } });
           await reload();

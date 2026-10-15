@@ -69,6 +69,22 @@ de Redis y recuperación de acceso sin email. TypeScript se fija en la versión 
 | Backup y restauración con archivos reales | Probado (Compose); el script de EasyPanel no se ha ejecutado contra EasyPanel |
 | Guía EasyPanel para 192.168.1.134 | Escrita; **no desplegada desde aquí** (sin acceso a esa red) |
 
+## Mejoras v1.1 — Estética, usabilidad y diseño del portfolio
+
+- [x] Nueva identidad visual «pasaporte» (tinta azul, verde mar, sellos amarillos) con tipografías autoalojadas
+      (Bricolage Grotesque + Atkinson Hyperlegible, pensada para la lectura). Modo oscuro y móvil revisados.
+- [x] Panel del alumno: una tarjeta-pasaporte por proyecto con sellos por sección, progreso y «siguiente paso».
+- [x] Portfolio: navegación lateral con estado de cada sección, explicación de qué hacer en cada una y botón «Siguiente».
+- [x] **Estudio de diseño** del alumno: plantilla (cuaderno, revista, póster, minimalista), 8 paletas + color propio
+      con aviso de contraste, 5 tipografías, portada (lema, icono, fondo, alineación), hasta 6 pegatinas, orden de
+      secciones, estilo de tarjetas y esquinas. Vista previa en directo con su propio contenido, «Sorpréndeme» y
+      guardado automático.
+- [x] El diseño se aplica en «Vista final», en la vista del profesor, en la vista previa de publicación y en la
+      página pública (queda congelado en el snapshot publicado).
+- [x] Seguridad: solo opciones cerradas validadas en servidor (sin CSS, HTML ni URLs libres); el lema pasa el
+      detector de privacidad; compatible con la CSP (variables aplicadas por CSSOM, patrones con gradientes CSS).
+- [x] Migración `004_design.sql` (columna `design`, no destructiva). Tests nuevos de API y e2e.
+
 ## Resultados de la última verificación
 
 ```

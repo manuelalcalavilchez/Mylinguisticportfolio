@@ -3,6 +3,7 @@ import type { Db } from '../db.js';
 import { audit } from './audit.js';
 import { HttpError } from './errors.js';
 import type { PortfolioRow, PublicationRequest } from './access.js';
+import { normalizeDesign, type Design } from './design.js';
 
 type Q = Pick<pg.Pool, 'query'> | pg.PoolClient;
 
@@ -54,6 +55,7 @@ export interface Snapshot {
   course: string;
   sections: Partial<PortfolioRow['content']>;
   evidences: SnapshotEvidence[];
+  design: Design;
 }
 
 /** Construye la versión pública a partir de la selección del alumno. Solo evidencias aceptadas. */
@@ -93,6 +95,7 @@ export async function buildSnapshot(db: Q, p: PortfolioRow, reqSel: PublicationR
     language: proj.language,
     course: proj.course,
     sections,
+    design: normalizeDesign(p.design),
     evidences: evRows.map((e) => ({
       id: e.id, title: e.title, date: e.date, language: e.language, skill: e.skill,
       externalUrl: e.external_url, reflection: e.reflection, fileMime: e.private_storage_key ? e.file_mime : null,
@@ -125,7 +128,10 @@ export function privacyIssues(snapshot: Snapshot, studentLogin: string): { path:
     } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`));
     else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);
   };
-  walk({ publicName: snapshot.publicName, sections: snapshot.sections, evidences: snapshot.evidences }, '');
+  walk(
+    { publicName: snapshot.publicName, sections: snapshot.sections, evidences: snapshot.evidences, design: { motto: snapshot.design?.cover.motto ?? '' } },
+    '',
+  );
   return issues;
 }
 

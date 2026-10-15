@@ -69,6 +69,7 @@ export interface PortfolioRow {
   template_version: number;
   publication_request: PublicationRequest | null;
   updated_at: Date;
+  design: unknown;
   project_status: string;
   group_id: string;
   teacher_id: string;
@@ -84,7 +85,7 @@ export interface PublicationRequest {
 export async function getPortfolioAccess(db: Db, user: SessionUser, portfolioId: string) {
   const { rows } = await db.query<PortfolioRow>(
     `SELECT p.id, p.student_id, p.project_id, p.status, p.content, p.version, p.template_version,
-            p.publication_request, p.updated_at,
+            p.publication_request, p.updated_at, p.design,
             pr.status AS project_status, pr.group_id, g.teacher_id, (m.status = 'active') AS member_active
        FROM portfolios p
        JOIN projects pr ON pr.id = p.project_id

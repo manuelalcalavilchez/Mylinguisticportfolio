@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import type { Db } from '../src/db.js';
+import { normalizeDesign } from '../src/lib/design.js';
 import { privacyIssues } from '../src/lib/publication.js';
 import {
   client, createUser, freshDb, inviteCode, openPortfolio, PDF, registerStudent, teacherWithGroup, testConfig,
@@ -228,7 +229,7 @@ describe('publicación: transiciones y requisitos', () => {
   });
 
   it('detector de privacidad: casos unitarios', () => {
-    const base = { templateVersion: 1, projectTitle: 'x', language: 'en', course: 'x', evidences: [] };
+    const base = { templateVersion: 1, projectTitle: 'x', language: 'en', course: 'x', evidences: [], design: normalizeDesign({}) };
     const chk = (text: string) => privacyIssues({ ...base, publicName: 'Ana', sections: { home: { aboutMe: text } } }, 'ana.lopez');
     expect(chk('My email is a.b@c.es')).toHaveLength(1);
     expect(chk('Call +34 612 34 56 78')).toHaveLength(1);
@@ -239,6 +240,26 @@ describe('publicación: transiciones y requisitos', () => {
     const ev = { id: '61234567-8901-4234-9567-890123456789', title: 'Essay', date: '2026-10-01', language: 'en', skill: 'writing', externalUrl: null, reflection: {}, fileMime: null };
     expect(privacyIssues({ ...base, evidences: [ev], publicName: 'Ana', sections: {} }, 'ana.lopez')).toHaveLength(0);
     expect(privacyIssues({ ...base, evidences: [{ ...ev, title: 'call 612345678' }], publicName: 'Ana', sections: {} }, 'ana.lopez')).toHaveLength(1);
+  });
+
+  it('el lema de la portada también pasa el detector de privacidad', () => {
+    const base = { templateVersion: 1, projectTitle: 'x', language: 'en', course: 'x', evidences: [], publicName: 'Ana', sections: {} };
+    const d = normalizeDesign({ cover: { motto: 'write me: ana@mail.com' } });
+    expect(privacyIssues({ ...base, design: d }, 'ana.lopez')).toEqual([{ path: 'design.motto', issue: 'email' }]);
+  });
+
+  it('el diseño elegido viaja en el snapshot público y queda congelado', async () => {
+    const t = await setup();
+    const v = (await t.student.get(`/api/portfolios/${t.pid}`)).body.portfolio.version;
+    const design = { layout: 'poster', palette: 'sunset', font: 'handwritten', stickers: ['🎸', '🇬🇧'], cover: { motto: 'Never stop learning', avatar: '🦊' } };
+    expect((await t.student.put(`/api/portfolios/${t.pid}/design`, { version: v, design })).status).toBe(200);
+    const slug = await publishFlow(t);
+    const pub = await anon().get(`/api/public/portfolios/${slug}`);
+    expect(pub.body.portfolio.design).toMatchObject({ layout: 'poster', palette: 'sunset', stickers: ['🎸', '🇬🇧'], cover: { motto: 'Never stop learning', avatar: '🦊' } });
+    // Cambiar el diseño después no altera lo publicado
+    const v2 = (await t.student.get(`/api/portfolios/${t.pid}`)).body.portfolio.version;
+    await t.student.put(`/api/portfolios/${t.pid}/design`, { version: v2, design: { layout: 'minimal' } });
+    expect((await anon().get(`/api/public/portfolios/${slug}`)).body.portfolio.design.layout).toBe('poster');
   });
 
   it('cancelar la solicitud desbloquea la edición', async () => {

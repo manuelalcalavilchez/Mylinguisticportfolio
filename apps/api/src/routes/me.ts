@@ -18,7 +18,7 @@ export function meRouter(db: Db) {
         [id],
       ),
       db.query(
-        `SELECT p.id, pr.title AS project, p.status, p.content, p.template_version AS "templateVersion", p.updated_at AS "updatedAt"
+        `SELECT p.id, pr.title AS project, p.status, p.content, p.design, p.template_version AS "templateVersion", p.updated_at AS "updatedAt"
            FROM portfolios p JOIN projects pr ON pr.id = p.project_id WHERE p.student_id = $1`,
         [id],
       ),

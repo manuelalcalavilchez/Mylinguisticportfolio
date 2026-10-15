@@ -70,7 +70,7 @@ export function useAction() {
 }
 
 export function Loading() {
-  return <p className="muted" aria-busy="true">Cargando…</p>;
+  return <p className="muted" aria-busy="true" role="status">Cargando…</p>;
 }
 
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'ok' | 'warn' | 'info' }) {
@@ -80,9 +80,35 @@ export function Badge({ children, tone = 'neutral' }: { children: ReactNode; ton
 export function ProgressBar({ percent, label }: { percent: number; label: string }) {
   return (
     <div className="progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-      <progress value={percent} max={100} />
-      <span>{percent}%</span>
+      <span className="bar"><span style={{ width: `${percent}%` }} /></span>
+      <strong>{percent}%</strong>
     </div>
+  );
+}
+
+export function EmptyState({ icon, title, children }: { icon?: string; title: string; children?: ReactNode }) {
+  return (
+    <div className="empty">
+      {icon && <span className="empty-icon" aria-hidden="true">{icon}</span>}
+      <strong>{title}</strong>
+      {children}
+    </div>
+  );
+}
+
+/** Sellos de pasaporte: uno por sección del portfolio. */
+export function SectionStamps({ sections }: { sections: { key: string; label: string; done: number; total: number }[] }) {
+  return (
+    <ul className="stamps" aria-label="Progreso por sección">
+      {sections.map((s) => {
+        const state = s.done >= s.total ? 'done' : s.done > 0 ? 'part' : '';
+        return (
+          <li key={s.key} className={`stamp ${state}`} aria-label={`${s.label}: ${s.done} de ${s.total}`}>
+            <span><b>{state === 'done' ? '✓' : `${s.done}/${s.total}`}</b>{s.label}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

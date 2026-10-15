@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
-  PORTFOLIO_STATUS, SECTION_LABEL, SKILL_LABEL, type Activity, type Progress, type RubricCriterion, type Section, type Skill,
+  PORTFOLIO_STATUS, SECTION_LABEL, SECTION_SHORT, SKILL_LABEL, type Activity, type Progress, type RubricCriterion, type Section, type Skill,
 } from '../lib/types';
-import { Badge, ErrorBox, Loading, ProgressBar, formatDate, statusTone, useAction, useLoad } from '../lib/ui';
+import { Badge, EmptyState, ErrorBox, Loading, ProgressBar, formatDate, statusTone, useAction, useLoad } from '../lib/ui';
 
 interface ProjectResp {
   project: { id: string; groupId: string; title: string; status: string; rubric: RubricCriterion[] };
@@ -25,13 +25,19 @@ export function ProjectPage() {
   const act = useAction();
   const [tab, setTab] = useState<'progress' | 'activities' | 'rubric'>('progress');
 
-  if (!proj.data) return <main className="card">{proj.loading ? <Loading /> : <ErrorBox error={proj.error} />}</main>;
+  if (!proj.data) return <main className="page">{proj.loading ? <Loading /> : <ErrorBox error={proj.error} />}</main>;
   const { project, activities } = proj.data;
 
   return (
-    <main className="card wide">
-      <p><Link to={`/grupos/${project.groupId}`}>← Grupo</Link></p>
-      <h1>{project.title} <Badge>{project.status === 'active' ? 'activo' : project.status}</Badge></h1>
+    <main className="page">
+      <Link className="back" to={`/grupos/${project.groupId}`}>Volver al grupo</Link>
+      <header className="page-head">
+        <div>
+          <h1>{project.title}</h1>
+          <p className="muted">Proyecto {project.status === 'active' ? 'abierto: el alumnado puede editar' : 'cerrado: solo lectura'}</p>
+        </div>
+        {prog.data && <ProgressBar percent={prog.data.groupAverage} label="Media del grupo" />}
+      </header>
       <ErrorBox error={act.error} />
       <div className="tabs" role="tablist">
         {(['progress', 'activities', 'rubric'] as const).map((t) => (
@@ -42,19 +48,19 @@ export function ProjectPage() {
       </div>
 
       {tab === 'progress' && (
-        <section>
+        <section className="panel">
           <p className="muted">Progreso orientativo: no equivale a una certificación de nivel MCER.</p>
           {prog.loading && <Loading />}
           <ErrorBox error={prog.error} />
           {prog.data && (
             <>
-              <ProgressBar percent={prog.data.groupAverage} label="Media del grupo" />
-              <p className="muted">Media del grupo: {prog.data.groupAverage}% · {prog.data.students.length} alumnos</p>
+              <p className="muted">Media del grupo: {prog.data.groupAverage}% · {prog.data.students.length} alumnos. Pulsa un nombre para abrir su portfolio.</p>
+              {prog.data.students.length === 0 && <EmptyState icon="🎒" title="Todavía no hay alumnos en este grupo" />}
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr><th>Alumno</th><th>Estado</th><th>Progreso</th>
-                      {(Object.keys(SECTION_LABEL) as Section[]).map((s) => <th key={s}>{SECTION_LABEL[s].replace('My ', '')}</th>)}
+                      {(Object.keys(SECTION_LABEL) as Section[]).map((s) => <th key={s}>{SECTION_SHORT[s]}</th>)}
                       <th>Por revisar</th><th>Actualizado</th></tr>
                   </thead>
                   <tbody>
@@ -62,9 +68,9 @@ export function ProjectPage() {
                       <tr key={s.studentId}>
                         <td>{s.portfolioId ? <Link to={`/portfolio/${s.portfolioId}`}>{s.displayName}</Link> : s.displayName}</td>
                         <td><Badge tone={statusTone(s.status)}>{PORTFOLIO_STATUS[s.status] ?? s.status}</Badge></td>
-                        <td>{s.progress.percent}%</td>
+                        <td><ProgressBar percent={s.progress.percent} label={`Progreso de ${s.displayName}`} /></td>
                         {(Object.keys(SECTION_LABEL) as Section[]).map((k) => (
-                          <td key={k}>{s.progress.sections[k].done}/{s.progress.sections[k].total}</td>
+                          <td key={k}><span className={s.progress.sections[k].done >= s.progress.sections[k].total ? 'mini full' : 'mini'}>{s.progress.sections[k].done >= s.progress.sections[k].total ? '✓' : `${s.progress.sections[k].done}/${s.progress.sections[k].total}`}</span></td>
                         ))}
                         <td>{s.pendingReviews > 0 ? <Badge tone="info">{s.pendingReviews}</Badge> : '—'}</td>
                         <td>{formatDate(s.updatedAt)}</td>
@@ -95,7 +101,7 @@ function ActivitiesEditor({ projectId, activities, onChange }: { projectId: stri
   const empty = { section: 'dossier' as Section, title: '', instructions: '', dueDate: '', skill: '' as Skill | '' };
   const [form, setForm] = useState(empty);
   return (
-    <section>
+    <section className="panel">
       <ErrorBox error={act.error} />
       {(Object.keys(SECTION_LABEL) as Section[]).map((s) => (
         <div key={s}>
@@ -166,7 +172,7 @@ function RubricEditor({ projectId, rubric, onChange }: { projectId: string; rubr
     setDraft(draft.map((x, j) => (j === i ? c : x)));
   };
   return (
-    <section>
+    <section className="panel">
       <p className="muted">
         Propuesta inicial de rúbrica, configurable. Es una ayuda orientativa y no sustituye la programación didáctica del centro.
       </p>

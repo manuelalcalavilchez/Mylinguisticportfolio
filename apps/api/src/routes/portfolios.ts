@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Db } from '../db.js';
 import { assertStudentCanEdit, getPortfolioAccess, publicEvidence, type EvidenceRow } from '../lib/access.js';
 import { audit } from '../lib/audit.js';
+import { designSchemaV1, normalizeDesign } from '../lib/design.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import {
   CAN_DO_V1, computeProgress, sectionSchemasV1, type RubricCriterion,
@@ -52,6 +53,7 @@ export function portfoliosRouter(db: Db) {
         version: p.version,
         templateVersion: p.template_version,
         content: p.content,
+        design: normalizeDesign(p.design),
         publicationRequest: p.publication_request,
         updatedAt: p.updated_at,
         editable: as === 'owner' && !!p.member_active && p.project_status === 'active'
@@ -86,6 +88,23 @@ export function portfoliosRouter(db: Db) {
       throw new HttpError(409, 'version_conflict', 'El portfolio se ha modificado en otra pestaña o dispositivo. Recarga para continuar.');
     }
     res.json({ version: rows[0].version, updatedAt: rows[0].updated_at });
+  });
+
+  // Diseño visual elegido por el alumno (opciones cerradas). Comparte el control de versión con las secciones.
+  r.put('/:id/design', requireRole('student'), async (req, res) => {
+    const { portfolio: p, as } = await getPortfolioAccess(db, req.user!, uuidSchema.parse(req.params.id));
+    if (as !== 'owner') throw notFound();
+    assertStudentCanEdit(p);
+    const body = z.object({ version: z.number().int().positive(), design: designSchemaV1 }).parse(req.body);
+    const { rows } = await db.query<{ version: number; updated_at: Date }>(
+      `UPDATE portfolios SET design = $2::jsonb, version = version + 1, updated_at = now()
+        WHERE id = $1 AND version = $3 RETURNING version, updated_at`,
+      [p.id, JSON.stringify(body.design), body.version],
+    );
+    if (!rows[0]) {
+      throw new HttpError(409, 'version_conflict', 'El portfolio se ha modificado en otra pestaña o dispositivo. Recarga para continuar.');
+    }
+    res.json({ version: rows[0].version, updatedAt: rows[0].updated_at, design: body.design });
   });
 
   // Comentario del profesor sobre el portfolio o una sección.

@@ -2,24 +2,26 @@ import { useCallback, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
-  PORTFOLIO_STATUS, SECTION_LABEL, type Evidence, type PortfolioContent, type PortfolioResponse, type PublicSnapshot,
+  PORTFOLIO_STATUS, SECTION_HELP, SECTION_LABEL, SECTION_SHORT, type Evidence, type PortfolioContent, type PortfolioResponse, type PublicSnapshot,
   type Section,
 } from '../lib/types';
 import { Badge, ErrorBox, Loading, ProgressBar, formatDate, statusTone, useAction, useLoad } from '../lib/ui';
 import { PortfolioView, SectionView, Text } from '../components/PortfolioView';
+import { DesignStudio } from '../components/DesignStudio';
+import { withDefaults, type Design } from '../lib/design';
 import {
   BiographyEditor, DossierIntroEditor, HomeEditor, PassportEditor, SaveIndicator, useAutosave,
 } from '../components/SectionEditors';
 import { StudentEvidences, TeacherEvidences } from '../components/Evidences';
 
-type Tab = Section | 'feedback' | 'publication';
+type Tab = Section | 'design' | 'final' | 'feedback' | 'publication';
 const SECTIONS: Section[] = ['home', 'passport', 'biography', 'dossier'];
 
 export function PortfolioPage() {
   const { id } = useParams();
   const { data, error, loading, reload } = useLoad(() => api<PortfolioResponse>(`/portfolios/${id}`), [id]);
   const [tab, setTab] = useState<Tab>('home');
-  if (!data) return <main className="card">{loading ? <Loading /> : <ErrorBox error={error} />}</main>;
+  if (!data) return <main className="page">{loading ? <Loading /> : <ErrorBox error={error} />}</main>;
   return <PortfolioScreen key={data.portfolio.id} data={data} reload={reload} tab={tab} setTab={setTab} />;
 }
 
@@ -29,77 +31,138 @@ function PortfolioScreen({ data, reload, tab, setTab }: {
   const { portfolio: p, as } = data;
   const isOwner = as === 'owner';
   const openReviews = data.reviews.filter((r) => r.status === 'open' && r.kind !== 'evidence_review').length;
+  // Último diseño guardado (para la vista final sin recargar).
+  const [design, setDesign] = useState<Design>(withDefaults(p.design));
 
-  // Control de versión compartido: los guardados se encadenan para no pisarse entre secciones.
+  // Control de versión compartido: los guardados se encadenan para no pisarse entre secciones y diseño.
   const versionRef = useRef(p.version);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueue = useCallback((path: string, body: (v: number) => unknown) => {
+    const run = queue.current.catch(() => undefined).then(async () => {
+      const r = await api<{ version: number }>(`/portfolios/${p.id}/${path}`, { method: 'PUT', body: body(versionRef.current) });
+      versionRef.current = r.version;
+    });
+    queue.current = run;
+    return run;
+  }, [p.id]);
   const saveSection = useCallback(
-    (section: Section, value: unknown) => {
-      const run = queue.current.catch(() => undefined).then(async () => {
-        const r = await api<{ version: number }>(`/portfolios/${p.id}/sections/${section}`, {
-          method: 'PUT', body: { version: versionRef.current, data: value },
-        });
-        versionRef.current = r.version;
-      });
-      queue.current = run;
-      return run;
-    },
-    [p.id],
+    (section: Section, value: unknown) => enqueue(`sections/${section}`, (version) => ({ version, data: value })),
+    [enqueue],
   );
+  const saveDesign = useCallback(async (d: Design) => {
+    await enqueue('design', (version) => ({ version, design: d }));
+    setDesign(d);
+  }, [enqueue]);
   const refresh = async () => {
     await reload();
   };
+  const go = (t: Tab) => {
+    setTab(t);
+    window.scrollTo({ top: 0 });
+  };
+  const fileUrl = (e: Evidence) => `/api/evidences/${e.id}/file`;
+  const sectionIdx = SECTIONS.indexOf(tab as Section);
+  const next = sectionIdx >= 0 && sectionIdx < SECTIONS.length - 1 ? SECTIONS[sectionIdx + 1]! : null;
+  const prev = sectionIdx > 0 ? SECTIONS[sectionIdx - 1]! : null;
+  const navItem = (t: Tab, label: string, extra?: React.ReactNode) => (
+    <button key={t} type="button" aria-current={tab === t ? 'page' : undefined} onClick={() => go(t)}>
+      <span>{label}</span>{extra}
+    </button>
+  );
 
   return (
-    <main className="card wide">
-      <p>{isOwner ? <Link to="/">← Inicio</Link> : <Link to={`/proyectos/${p.projectId}`}>← Seguimiento del grupo</Link>}</p>
-      <header className="portfolio-header">
+    <main className="page">
+      {isOwner ? <Link className="back" to="/">Mis portfolios</Link> : <Link className="back" to={`/proyectos/${p.projectId}`}>Seguimiento del grupo</Link>}
+      <header className="page-head">
         <div>
           <h1>{p.content.home?.title || 'My Linguistic Portfolio'}</h1>
-          <p className="muted">
-            {data.project.title}{!isOwner && ` · ${data.student.displayName} (${data.student.login})`}
-          </p>
+          <p className="muted">{data.project.title}{!isOwner && ` · ${data.student.displayName} (${data.student.login})`}</p>
         </div>
-        <div>
+        <div className="row wrap">
           <Badge tone={statusTone(p.status)}>{PORTFOLIO_STATUS[p.status]}</Badge>
           <ProgressBar percent={data.progress.percent} label="Progreso del portfolio" />
         </div>
       </header>
       {isOwner && !p.editable && (
-        <p className="notice">
+        <p className="notice warn">
           {data.project.status !== 'active'
-            ? 'El proyecto está cerrado: el portfolio es de solo lectura.'
-            : 'Tu portfolio está en revisión de publicación. Para editar, cancela la solicitud en la pestaña Publicación.'}
+            ? 'El proyecto está cerrado: tu portfolio se puede ver pero ya no se puede cambiar.'
+            : 'Tu portfolio está en revisión de publicación. Si quieres seguir editando, cancela la solicitud en «Publicar».'}
         </p>
       )}
-      <nav className="tabs" role="tablist" aria-label="Secciones del portfolio">
-        {SECTIONS.map((s) => (
-          <button key={s} role="tab" aria-selected={tab === s} className={tab === s ? 'tab active' : 'tab'} onClick={() => setTab(s)}>
-            {SECTION_LABEL[s]} <span className="muted small">{data.progress.sections[s].done}/{data.progress.sections[s].total}</span>
-          </button>
-        ))}
-        <button role="tab" aria-selected={tab === 'feedback'} className={tab === 'feedback' ? 'tab active' : 'tab'} onClick={() => setTab('feedback')}>
-          {isOwner ? 'Feedback' : 'Revisión'} {openReviews > 0 && <Badge tone="info">{openReviews}</Badge>}
-        </button>
-        <button role="tab" aria-selected={tab === 'publication'} className={tab === 'publication' ? 'tab active' : 'tab'} onClick={() => setTab('publication')}>
-          Publicación
-        </button>
-      </nav>
 
-      {SECTIONS.includes(tab as Section) && (
-        <section role="tabpanel">
-          <Instructions data={data} section={tab as Section} />
-          {isOwner && p.editable
-            ? <EditableSection section={tab as Section} content={p.content} save={saveSection} />
-            : <SectionView section={tab as Section} content={p.content} />}
-          {tab === 'dossier' && (isOwner
-            ? <StudentEvidences portfolioId={p.id} evidences={data.evidences} activities={data.activities} reviews={data.reviews} editable={p.editable} onChange={refresh} />
-            : <TeacherEvidences evidences={data.evidences} reviews={data.reviews} onChange={refresh} />)}
-          {!isOwner && <CommentBox portfolioId={p.id} section={tab as Section} onChange={refresh} />}
-        </section>
-      )}
-      {tab === 'feedback' && <FeedbackPanel data={data} onChange={refresh} />}
-      {tab === 'publication' && <PublicationPanel data={data} onChange={refresh} />}
+      <div className={tab === 'design' || tab === 'final' ? 'pf-editor full' : 'pf-editor'}>
+        <nav className="pf-nav" aria-label="Partes del portfolio">
+          <span className="nav-group">{isOwner ? 'Escribe' : 'Contenido'}</span>
+          {SECTIONS.map((s) => {
+            const pr = data.progress.sections[s];
+            const done = pr.done >= pr.total;
+            return navItem(s, SECTION_SHORT[s], (
+              <span className={done ? 'tick done' : 'tick'} aria-label={`${pr.done} de ${pr.total}`}>{done ? '✓' : `${pr.done}/${pr.total}`}</span>
+            ));
+          })}
+          <span className="nav-group">{isOwner ? 'Dale tu estilo' : 'Resultado'}</span>
+          {isOwner && navItem('design', '🎨 Diseño')}
+          {navItem('final', '👀 Vista final')}
+          <span className="nav-group">Revisión</span>
+          {navItem('feedback', isOwner ? 'Comentarios' : 'Evaluar', openReviews > 0 ? <Badge tone="info">{openReviews}</Badge> : undefined)}
+          {navItem('publication', 'Publicar')}
+        </nav>
+
+        <div className="pf-work">
+          {sectionIdx >= 0 && (
+            <section className="panel" aria-labelledby="sec-title">
+              <div className="section-head">
+                <div>
+                  <h2 id="sec-title">{SECTION_LABEL[tab as Section]}</h2>
+                  {isOwner && <p className="section-intro">{SECTION_HELP[tab as Section]}</p>}
+                </div>
+              </div>
+              <Instructions data={data} section={tab as Section} />
+              {isOwner && p.editable
+                ? <EditableSection key={tab} section={tab as Section} content={p.content} save={saveSection} />
+                : <SectionView section={tab as Section} content={p.content} />}
+              {tab === 'dossier' && (isOwner
+                ? <StudentEvidences portfolioId={p.id} evidences={data.evidences} activities={data.activities} reviews={data.reviews} editable={p.editable} onChange={refresh} />
+                : <TeacherEvidences evidences={data.evidences} reviews={data.reviews} onChange={refresh} />)}
+              {!isOwner && <CommentBox portfolioId={p.id} section={tab as Section} onChange={refresh} />}
+              <div className="section-footer">
+                {prev ? <button type="button" className="ghost" onClick={() => go(prev)}>‹ {SECTION_SHORT[prev]}</button> : <span />}
+                {next
+                  ? <button type="button" onClick={() => go(next)}>Siguiente: {SECTION_SHORT[next]} ›</button>
+                  : <button type="button" onClick={() => go(isOwner ? 'design' : 'final')}>{isOwner ? 'Siguiente: diseñar mi portfolio ›' : 'Ver el portfolio final ›'}</button>}
+              </div>
+            </section>
+          )}
+          {tab === 'design' && isOwner && (
+            <section className="panel">
+              <DesignStudio
+                initial={design}
+                content={p.content}
+                evidences={data.evidences}
+                fileUrl={fileUrl}
+                ownerName={data.student.displayName}
+                editable={p.editable}
+                save={saveDesign}
+              />
+            </section>
+          )}
+          {tab === 'final' && (
+            <section>
+              <p className="muted">
+                {isOwner
+                  ? 'Así se ve tu portfolio completo, con todas tus evidencias. Lo que se publique dependerá de lo que elijas en «Publicar».'
+                  : 'Portfolio completo con el diseño elegido por el alumno.'}
+              </p>
+              <div className="preview-frame">
+                <PortfolioView content={p.content} evidences={data.evidences} fileUrl={fileUrl} design={design} owner={data.student.displayName} idPrefix="final" />
+              </div>
+            </section>
+          )}
+          {tab === 'feedback' && <div className="panel"><FeedbackPanel data={data} onChange={refresh} /></div>}
+          {tab === 'publication' && <div className="panel"><PublicationPanel data={data} onChange={refresh} /></div>}
+        </div>
+      </div>
     </main>
   );
 }
@@ -344,12 +407,15 @@ function PublicationPanel({ data, onChange }: { data: PortfolioResponse; onChang
               )}
               {preview.snapshot && (
                 <div className="preview-frame" aria-label="Vista previa">
-                  <PublicHeader s={preview.snapshot} />
                   <PortfolioView
                     content={preview.snapshot.sections}
-                    sections={SECTIONS.filter((s) => s in preview.snapshot!.sections || s === 'dossier' && preview.snapshot!.evidences.length > 0)}
+                    sections={SECTIONS.filter((s) => s in preview.snapshot!.sections)}
                     evidences={preview.snapshot.evidences as Evidence[]}
                     fileUrl={(e) => `/api/evidences/${e.id}/file`}
+                    design={preview.snapshot.design}
+                    owner={publicOwnerLine(preview.snapshot)}
+                    fallbackTitle={`${preview.snapshot.publicName}’s Linguistic Portfolio`}
+                    idPrefix="prev"
                   />
                 </div>
               )}
@@ -365,11 +431,6 @@ function PublicationPanel({ data, onChange }: { data: PortfolioResponse; onChang
   );
 }
 
-export function PublicHeader({ s }: { s: PublicSnapshot }) {
-  return (
-    <header className="public-header">
-      <h1>{s.sections.home?.title || `${s.publicName}’s Linguistic Portfolio`}</h1>
-      <p className="muted">{s.publicName} · {s.projectTitle} · {s.course}{s.publishedAt ? ` · ${formatDate(s.publishedAt)}` : ''}</p>
-    </header>
-  );
+export function publicOwnerLine(s: PublicSnapshot) {
+  return [s.publicName, s.course, s.publishedAt ? formatDate(s.publishedAt) : ''].filter(Boolean).join(' · ');
 }

@@ -10,6 +10,16 @@ import { GroupPage } from './pages/GroupPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { PublicPortfolioPage } from './pages/PublicPortfolioPage';
+import '@fontsource-variable/bricolage-grotesque';
+import '@fontsource/atkinson-hyperlegible/400.css';
+import '@fontsource/atkinson-hyperlegible/700.css';
+import '@fontsource/atkinson-hyperlegible/400-italic.css';
+import '@fontsource-variable/fraunces';
+import '@fontsource-variable/literata';
+import '@fontsource-variable/nunito';
+import '@fontsource/caveat/400.css';
+import '@fontsource/caveat/700.css';
+import '@fontsource/special-elite/400.css';
 import './styles.css';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -23,19 +33,25 @@ function Shell() {
   const { user, loading, logout } = useAuth();
   const loc = useLocation();
   const isPublic = loc.pathname.startsWith('/p/');
-  if (loading && !isPublic) return <p className="card narrow" aria-busy="true">Cargando…</p>;
+  if (loading && !isPublic) return <main className="page narrow"><p className="muted" aria-busy="true">Cargando…</p></main>;
+  const initial = user?.displayName.trim().charAt(0).toUpperCase() ?? '';
   return (
     <>
       <a className="skip" href="#main">Saltar al contenido</a>
-      <header className="topbar">
-        <Link to="/" className="brand">My Linguistic Portfolio</Link>
-        {user && !isPublic && (
-          <nav className="row">
-            <Link to="/cuenta">{user.displayName}</Link>
-            <button type="button" className="secondary small" onClick={() => void logout()}>Salir</button>
-          </nav>
-        )}
-      </header>
+      {!isPublic && (
+        <header className="topbar">
+          <Link to="/" className="brand">
+            <span className="brand-mark" aria-hidden="true">MLP</span>
+            <span>My Linguistic Portfolio<small>English · 4.º ESO</small></span>
+          </Link>
+          {user && (
+            <nav className="topnav" aria-label="Cuenta">
+              <Link to="/cuenta" title="Mi cuenta"><span className="avatar-dot" aria-hidden="true">{initial}</span><span className="who">{user.displayName}</span></Link>
+              <button type="button" onClick={() => void logout()}>Salir</button>
+            </nav>
+          )}
+        </header>
+      )}
       <div id="main">
         <Routes>
           <Route path="/p/:slug" element={<PublicPortfolioPage />} />
